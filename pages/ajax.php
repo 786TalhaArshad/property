@@ -23,6 +23,9 @@ if ($action === 'blocks') {
     $rows = db_all("SELECT b.id, CONCAT(b.booking_no, ' - ', p.property_no) AS name FROM bookings b
                     JOIN properties p ON p.id = b.property_id
                     WHERE b.customer_id = ? AND b.status <> 'cancelled' ORDER BY b.id DESC", [$id]);
+} elseif ($action === 'booking_info') {
+    $rows = db_all("SELECT b.id, b.booking_no, b.status, COALESCE((SELECT SUM(r.amount) FROM receipts r WHERE r.booking_id = b.id),0) AS paid
+                    FROM bookings b WHERE b.id = ?", [$id]);
 }
 
 header('Content-Type: application/json');

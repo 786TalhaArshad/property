@@ -5,7 +5,7 @@ require_permission('sales.view');
 
 $id = (int)($_GET['id'] ?? 0);
 $r = db_get("SELECT r.*, c.full_name AS customer_name, c.cnic AS customer_cnic, c.phone AS customer_phone, c.address AS customer_address,
-             b.booking_no, b.total_price, p.property_no, p.address AS property_address,
+             b.booking_no, b.total_price, p.property_no, p.plot_no AS property_address,
              i.installment_no, i.installment_type,
              pm.name AS method_name, bk.name AS bank_name, u.full_name AS receiver
              FROM receipts r
@@ -21,7 +21,7 @@ if (!$r) {
     flash('danger', 'Receipt not found.');
     redirect('receipts.php');
 }
-$company = [
+$companyInfo = [
     'name' => setting('company_name', 'Company'),
     'tagline' => setting('company_tagline', ''),
     'address' => setting('company_address', ''),
@@ -67,10 +67,10 @@ include '../includes/header.php';
 <div class="receipt-sheet p-4">
     <div class="head d-flex justify-content-between align-items-center pb-3">
         <div>
-            <h4 class="mb-0 fw-bold"><?= e($company['name']) ?></h4>
-            <div class="small text-muted"><?= e($company['tagline']) ?></div>
-            <div class="small text-muted"><?= e($company['address']) ?></div>
-            <div class="small text-muted">Phone: <?= e($company['phone']) ?> &bull; Email: <?= e($company['email']) ?></div>
+            <h4 class="mb-0 fw-bold"><?= e($companyInfo['name']) ?></h4>
+            <div class="small text-muted"><?= e($companyInfo['tagline']) ?></div>
+            <div class="small text-muted"><?= e($companyInfo['address']) ?></div>
+            <div class="small text-muted">Phone: <?= e($companyInfo['phone']) ?> &bull; Email: <?= e($companyInfo['email']) ?></div>
         </div>
         <div class="text-center">
             <div class="badge bg-dark text-uppercase px-3 py-2 fs-6">Payment Receipt</div>

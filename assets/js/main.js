@@ -6,10 +6,11 @@ $(function () {
 
     $('[data-toggle="nav-parent"]').on('click', function (e) {
         e.preventDefault();
-        var target = $(this).attr('data-target');
-        var $target = $(target);
-        $('.collapse.show').not($target).collapse('hide');
+        var $link = $(this);
+        var $target = $($link.attr('data-target'));
+        $link.closest('.nav-item').siblings('.nav-item').find('.collapse.show').collapse('hide');
         $target.collapse('toggle');
+        $link.toggleClass('open');
     });
 
     $(document).on('click', '[data-edit]', function () {

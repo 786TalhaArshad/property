@@ -1,152 +1,150 @@
 <nav class="sidebar-nav">
-    <div class="nav-section">Main</div>
     <div class="nav-item <?= active_menu('dashboard') ?>">
         <a class="nav-link" href="<?= BASE_URL ?>/index.php"><i class="bi bi-speedometer2"></i>Dashboard</a>
     </div>
 
     <?php if (has_permission('crm.view')): ?>
-    <div class="nav-section">CRM</div>
-    <div class="nav-item <?= active_menu('leads') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/leads.php"><i class="bi bi-funnel"></i>Leads</a>
-    </div>
-    <div class="nav-item <?= active_menu('calls') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/call_logs.php"><i class="bi bi-telephone"></i>Call Logs</a>
-    </div>
-    <div class="nav-item <?= active_menu('meetings') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/meetings.php"><i class="bi bi-calendar-event"></i>Meetings</a>
-    </div>
-    <div class="nav-item <?= active_menu('tasks') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/tasks.php"><i class="bi bi-check2-square"></i>Tasks</a>
+    <?php $crm = submenu_state(['leads', 'calls', 'meetings', 'tasks']); ?>
+    <div class="nav-item <?= $crm ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subCrm">
+            <i class="bi bi-funnel"></i>CRM <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $crm ? 'show' : '' ?>" id="subCrm">
+            <a class="nav-link <?= active_menu('leads') ?>" href="<?= BASE_URL ?>/pages/leads.php">Leads</a>
+            <a class="nav-link <?= active_menu('calls') ?>" href="<?= BASE_URL ?>/pages/call_logs.php">Call Logs</a>
+            <a class="nav-link <?= active_menu('meetings') ?>" href="<?= BASE_URL ?>/pages/meetings.php">Meetings</a>
+            <a class="nav-link <?= active_menu('tasks') ?>" href="<?= BASE_URL ?>/pages/tasks.php">Tasks</a>
+        </div>
     </div>
     <?php endif; ?>
 
     <?php if (has_permission('projects.view') || has_permission('properties.view')): ?>
-    <div class="nav-section">Real Estate</div>
-    <?php if (has_permission('projects.view')): ?>
-    <div class="nav-item <?= active_menu('projects') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/projects.php"><i class="bi bi-grid-1x2"></i>Projects</a>
+    <?php $realEstate = submenu_state(['projects', 'properties']); ?>
+    <div class="nav-item <?= $realEstate ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subRealEstate">
+            <i class="bi bi-grid-1x2"></i>Real Estate <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $realEstate ? 'show' : '' ?>" id="subRealEstate">
+            <?php if (has_permission('projects.view')): ?>
+            <a class="nav-link <?= active_menu('projects') ?>" href="<?= BASE_URL ?>/pages/projects.php">Projects</a>
+            <?php endif; ?>
+            <?php if (has_permission('properties.view')): ?>
+            <a class="nav-link <?= active_menu('properties') ?>" href="<?= BASE_URL ?>/pages/properties.php">Property Inventory</a>
+            <?php endif; ?>
+        </div>
     </div>
-    <?php endif; ?>
-    <?php if (has_permission('properties.view')): ?>
-    <div class="nav-item <?= active_menu('properties') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/properties.php"><i class="bi bi-house-door"></i>Property Inventory</a>
-    </div>
-    <?php endif; ?>
     <?php endif; ?>
 
-    <?php if (has_permission('customers.view') || has_permission('owners.view') || has_permission('dealers.view')): ?>
-    <div class="nav-section">Parties</div>
-    <?php if (has_permission('customers.view')): ?>
-    <div class="nav-item <?= active_menu('customers') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/customers.php"><i class="bi bi-people"></i>Customers</a>
+    <?php if (has_permission('customers.view') || has_permission('owners.view') || has_permission('dealers.view') || has_permission('vendors.view') || has_permission('general_parties.view')): ?>
+    <?php $parties = submenu_state(['customers', 'owners', 'dealers', 'vendors', 'general_parties']); ?>
+    <div class="nav-item <?= $parties ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subParties">
+            <i class="bi bi-people"></i>Parties <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $parties ? 'show' : '' ?>" id="subParties">
+            <?php if (has_permission('customers.view')): ?>
+            <a class="nav-link <?= active_menu('customers') ?>" href="<?= BASE_URL ?>/pages/customers.php">Customers</a>
+            <?php endif; ?>
+            <?php if (has_permission('owners.view')): ?>
+            <a class="nav-link <?= active_menu('owners') ?>" href="<?= BASE_URL ?>/pages/owners.php">Owners</a>
+            <?php endif; ?>
+            <?php if (has_permission('dealers.view')): ?>
+            <a class="nav-link <?= active_menu('dealers') ?>" href="<?= BASE_URL ?>/pages/dealers.php">Dealers / Agents</a>
+            <?php endif; ?>
+            <?php if (has_permission('vendors.view')): ?>
+            <a class="nav-link <?= active_menu('vendors') ?>" href="<?= BASE_URL ?>/pages/vendors.php">Vendors</a>
+            <?php endif; ?>
+            <?php if (has_permission('general_parties.view')): ?>
+            <a class="nav-link <?= active_menu('general_parties') ?>" href="<?= BASE_URL ?>/pages/general_parties.php">General Party</a>
+            <?php endif; ?>
+        </div>
     </div>
-    <?php endif; ?>
-    <?php if (has_permission('owners.view')): ?>
-    <div class="nav-item <?= active_menu('owners') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/owners.php"><i class="bi bi-person-badge"></i>Owners</a>
-    </div>
-    <?php endif; ?>
-    <?php if (has_permission('dealers.view')): ?>
-    <div class="nav-item <?= active_menu('dealers') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/dealers.php"><i class="bi bi-handshake"></i>Dealers / Agents</a>
-    </div>
-    <?php endif; ?>
     <?php endif; ?>
 
     <?php if (has_permission('sales.view')): ?>
-    <div class="nav-section">Sales</div>
-    <div class="nav-item <?= active_menu('quotations') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/quotations.php"><i class="bi bi-file-earmark-text"></i>Quotations</a>
-    </div>
-    <div class="nav-item <?= active_menu('bookings') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/bookings.php"><i class="bi bi-journal-check"></i>Bookings</a>
-    </div>
-    <div class="nav-item <?= active_menu('agreements') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/agreements.php"><i class="bi bi-file-earmark-check"></i>Sale Agreements</a>
-    </div>
-    <div class="nav-item <?= active_menu('installments') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/installments.php"><i class="bi bi-calendar2-check"></i>Installments</a>
-    </div>
-    <div class="nav-item <?= active_menu('receipts') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/receipts.php"><i class="bi bi-cash-coin"></i>Receipts</a>
+    <?php $sales = submenu_state(['quotations', 'bookings', 'agreements', 'installments', 'receipts']); ?>
+    <div class="nav-item <?= $sales ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subSales">
+            <i class="bi bi-bag-check"></i>Sales <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $sales ? 'show' : '' ?>" id="subSales">
+            <a class="nav-link <?= active_menu('quotations') ?>" href="<?= BASE_URL ?>/pages/quotations.php">Quotations</a>
+            <a class="nav-link <?= active_menu('bookings') ?>" href="<?= BASE_URL ?>/pages/bookings.php">Bookings</a>
+            <a class="nav-link <?= active_menu('agreements') ?>" href="<?= BASE_URL ?>/pages/agreements.php">Sale Agreements</a>
+            <a class="nav-link <?= active_menu('installments') ?>" href="<?= BASE_URL ?>/pages/installments.php">Installments</a>
+            <a class="nav-link <?= active_menu('receipts') ?>" href="<?= BASE_URL ?>/pages/receipts.php">Receipts</a>
+        </div>
     </div>
     <?php endif; ?>
 
     <?php if (has_permission('rentals.view')): ?>
-    <div class="nav-section">Rentals</div>
-    <div class="nav-item <?= active_menu('rental_agreements') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/rental_agreements.php"><i class="bi bi-house-heart"></i>Rental Agreements</a>
-    </div>
-    <div class="nav-item <?= active_menu('tenants') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/tenants.php"><i class="bi bi-person-check"></i>Tenants</a>
-    </div>
-    <div class="nav-item <?= active_menu('rent_collections') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/rent_collections.php"><i class="bi bi-cash"></i>Rent Collection</a>
-    </div>
-    <div class="nav-item <?= active_menu('owner_settlements') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/owner_settlements.php"><i class="bi bi-wallet2"></i>Owner Settlements</a>
+    <?php $rentals = submenu_state(['rental_agreements', 'tenants', 'rent_collections', 'owner_settlements']); ?>
+    <div class="nav-item <?= $rentals ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subRentals">
+            <i class="bi bi-house-heart"></i>Rentals <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $rentals ? 'show' : '' ?>" id="subRentals">
+            <a class="nav-link <?= active_menu('rental_agreements') ?>" href="<?= BASE_URL ?>/pages/rental_agreements.php">Rental Agreements</a>
+            <a class="nav-link <?= active_menu('tenants') ?>" href="<?= BASE_URL ?>/pages/tenants.php">Tenants</a>
+            <a class="nav-link <?= active_menu('rent_collections') ?>" href="<?= BASE_URL ?>/pages/rent_collections.php">Rent Collection</a>
+            <a class="nav-link <?= active_menu('owner_settlements') ?>" href="<?= BASE_URL ?>/pages/owner_settlements.php">Owner Settlements</a>
+        </div>
     </div>
     <?php endif; ?>
 
     <?php if (has_permission('utilities.view') || has_permission('maintenance.view')): ?>
-    <div class="nav-section">Operations</div>
-    <?php if (has_permission('utilities.view')): ?>
-    <div class="nav-item <?= active_menu('utilities') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/utilities.php"><i class="bi bi-plug"></i>Utilities</a>
+    <?php $operations = submenu_state(['utilities', 'maintenance']); ?>
+    <div class="nav-item <?= $operations ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subOperations">
+            <i class="bi bi-tools"></i>Operations <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $operations ? 'show' : '' ?>" id="subOperations">
+            <?php if (has_permission('utilities.view')): ?>
+            <a class="nav-link <?= active_menu('utilities') ?>" href="<?= BASE_URL ?>/pages/utilities.php">Utilities</a>
+            <?php endif; ?>
+            <?php if (has_permission('maintenance.view')): ?>
+            <a class="nav-link <?= active_menu('maintenance') ?>" href="<?= BASE_URL ?>/pages/maintenance.php">Maintenance</a>
+            <?php endif; ?>
+        </div>
     </div>
-    <?php endif; ?>
-    <?php if (has_permission('maintenance.view')): ?>
-    <div class="nav-item <?= active_menu('maintenance') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/maintenance.php"><i class="bi bi-tools"></i>Maintenance</a>
-    </div>
-    <?php endif; ?>
     <?php endif; ?>
 
     <?php if (has_permission('accounting.view')): ?>
-    <div class="nav-section">Finance</div>
-    <div class="nav-item <?= active_menu('chart_of_accounts') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/chart_of_accounts.php"><i class="bi bi-diagram-3"></i>Chart of Accounts</a>
-    </div>
-    <div class="nav-item <?= active_menu('vouchers') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/vouchers.php"><i class="bi bi-receipt"></i>Vouchers</a>
-    </div>
-    <div class="nav-item <?= active_menu('ledger') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/ledger.php"><i class="bi bi-book"></i>General Ledger</a>
-    </div>
-    <div class="nav-item <?= active_menu('trial_balance') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/trial_balance.php"><i class="bi bi-columns-gap"></i>Trial Balance</a>
-    </div>
-    <div class="nav-item <?= active_menu('profit_loss') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/profit_loss.php"><i class="bi bi-graph-up-arrow"></i>Profit &amp; Loss</a>
-    </div>
-    <div class="nav-item <?= active_menu('balance_sheet') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/balance_sheet.php"><i class="bi bi-layers"></i>Balance Sheet</a>
+    <?php $finance = submenu_state(['chart_of_accounts', 'vouchers', 'transfers', 'ledger', 'trial_balance', 'profit_loss', 'balance_sheet']); ?>
+    <div class="nav-item <?= $finance ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subFinance">
+            <i class="bi bi-wallet2"></i>Finance <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $finance ? 'show' : '' ?>" id="subFinance">
+            <a class="nav-link <?= active_menu('chart_of_accounts') ?>" href="<?= BASE_URL ?>/pages/chart_of_accounts.php">Chart of Accounts</a>
+            <a class="nav-link <?= active_menu('vouchers') ?>" href="<?= BASE_URL ?>/pages/vouchers.php">Vouchers</a>
+            <a class="nav-link <?= active_menu('transfers') ?>" href="<?= BASE_URL ?>/pages/transfers.php">Transfers / Withdrawals</a>
+            <a class="nav-link <?= active_menu('ledger') ?>" href="<?= BASE_URL ?>/pages/ledger.php">General Ledger</a>
+            <a class="nav-link <?= active_menu('trial_balance') ?>" href="<?= BASE_URL ?>/pages/trial_balance.php">Trial Balance</a>
+            <a class="nav-link <?= active_menu('profit_loss') ?>" href="<?= BASE_URL ?>/pages/profit_loss.php">Profit &amp; Loss</a>
+            <a class="nav-link <?= active_menu('balance_sheet') ?>" href="<?= BASE_URL ?>/pages/balance_sheet.php">Balance Sheet</a>
+        </div>
     </div>
     <?php endif; ?>
 
     <?php if (has_permission('documents.view')): ?>
-    <div class="nav-section">Utilities</div>
     <div class="nav-item <?= active_menu('documents') ?>">
         <a class="nav-link" href="<?= BASE_URL ?>/pages/documents.php"><i class="bi bi-folder2-open"></i>Documents</a>
     </div>
     <?php endif; ?>
 
     <?php if (has_permission('reports.view')): ?>
-    <div class="nav-section">Reports</div>
-    <div class="nav-item">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/sales_report.php"><i class="bi bi-bar-chart"></i>Sales Report</a>
-    </div>
-    <div class="nav-item">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/rental_report.php"><i class="bi bi-bar-chart"></i>Rental Report</a>
-    </div>
-    <div class="nav-item">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/recovery_report.php"><i class="bi bi-bar-chart"></i>Recovery Report</a>
-    </div>
-    <div class="nav-item">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/outstanding_report.php"><i class="bi bi-bar-chart"></i>Outstanding Report</a>
-    </div>
-    <div class="nav-item">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/income_expense_report.php"><i class="bi bi-bar-chart"></i>Income / Expense</a>
+    <div class="nav-item <?= active_menu('reports') ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subReports">
+            <i class="bi bi-bar-chart"></i>Reports <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= active_menu('reports') ? 'show' : '' ?>" id="subReports">
+            <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/sales_report.php">Sales Report</a>
+            <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/rental_report.php">Rental Report</a>
+            <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/recovery_report.php">Recovery Report</a>
+            <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/outstanding_report.php">Outstanding Report</a>
+            <a class="nav-link" href="<?= BASE_URL ?>/pages/reports/income_expense_report.php">Income / Expense</a>
+        </div>
     </div>
     <?php endif; ?>
 
@@ -157,40 +155,41 @@
     <?php endif; ?>
 
     <?php if (has_permission('master.view') || has_permission('settings.manage')): ?>
-    <div class="nav-section">System</div>
-    <?php if (has_permission('master.view')): ?>
-    <div class="nav-item">
-        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subMaster">
-            <i class="bi bi-journal-text"></i>Master Data <i class="bi bi-chevron-down chevron"></i>
+    <?php $system = submenu_state(['master', 'settings', 'users', 'roles']); ?>
+    <div class="nav-item <?= $system ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subSystem">
+            <i class="bi bi-gear"></i>System <i class="bi bi-chevron-down chevron"></i>
         </a>
-        <div class="collapse" id="subMaster">
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/countries.php">Countries</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/cities.php">Cities</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/areas.php">Areas</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/societies.php">Societies</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/property_types.php">Property Types</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/property_categories.php">Property Categories</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/amenities.php">Amenities</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/payment_methods.php">Payment Methods</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/banks.php">Banks</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/expense_categories.php">Expense Categories</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/income_categories.php">Income Categories</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/document_types.php">Document Types</a>
-            <a class="nav-link" href="<?= BASE_URL ?>/pages/branches.php">Branches</a>
+        <div class="collapse <?= $system ? 'show' : '' ?>" id="subSystem">
+            <?php if (has_permission('master.view')): ?>
+            <div class="nav-item <?= active_menu('master') ?>">
+                <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subMaster">
+                    <i class="bi bi-journal-text"></i>Master Data <i class="bi bi-chevron-down chevron"></i>
+                </a>
+                <div class="collapse <?= active_menu('master') ? 'show' : '' ?>" id="subMaster">
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/countries.php">Countries</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/cities.php">Cities</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/areas.php">Areas</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/societies.php">Societies</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/property_types.php">Property Types</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/property_categories.php">Property Categories</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/amenities.php">Amenities</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/payment_methods.php">Payment Methods</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/banks.php">Banks</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/expense_categories.php">Expense Categories</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/income_categories.php">Income Categories</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/document_types.php">Document Types</a>
+                    <a class="nav-link" href="<?= BASE_URL ?>/pages/branches.php">Branches</a>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php if (has_permission('settings.manage')): ?>
+            <a class="nav-link <?= active_menu('settings') ?>" href="<?= BASE_URL ?>/pages/settings.php">Company Settings</a>
+            <a class="nav-link <?= active_menu('users') ?>" href="<?= BASE_URL ?>/pages/users.php">Users</a>
+            <a class="nav-link <?= active_menu('roles') ?>" href="<?= BASE_URL ?>/pages/roles.php">Roles &amp; Permissions</a>
+            <?php endif; ?>
         </div>
     </div>
-    <?php endif; ?>
-    <?php if (has_permission('settings.manage')): ?>
-    <div class="nav-item <?= active_menu('settings') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/settings.php"><i class="bi bi-gear"></i>Company Settings</a>
-    </div>
-    <div class="nav-item <?= active_menu('users') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/users.php"><i class="bi bi-person-lock"></i>Users</a>
-    </div>
-    <div class="nav-item <?= active_menu('roles') ?>">
-        <a class="nav-link" href="<?= BASE_URL ?>/pages/roles.php"><i class="bi bi-shield-lock"></i>Roles &amp; Permissions</a>
-    </div>
-    <?php endif; ?>
     <?php endif; ?>
 
     <div class="nav-item mt-3">

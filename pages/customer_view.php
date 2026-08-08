@@ -13,6 +13,9 @@ if (!$cust) {
     redirect('customers.php');
 }
 
+$ledgerStart = trim($_GET['start_date'] ?? '');
+$ledgerEnd = trim($_GET['end_date'] ?? '');
+
 if (is_post() && $canEdit) {
     csrf_check();
     $action = $_POST['action'] ?? '';
@@ -46,7 +49,44 @@ $paidRows = db_all("SELECT receipt_date, receipt_no, amount FROM receipts WHERE 
 foreach ($paidRows as $pr) {
     $totalPaid += (float)$pr['amount'];
 }
+$transfers = db_all("SELECT t.*, fc.full_name AS from_name, tc.full_name AS to_name
+                     FROM transfers t
+                     LEFT JOIN customers fc ON fc.id = t.from_customer_id
+                     LEFT JOIN customers tc ON tc.id = t.to_customer_id
+                     WHERE t.transfer_type = 'customer_to_customer' AND (t.from_customer_id = ? OR t.to_customer_id = ?)
+                     ORDER BY t.transfer_date, t.id", [$id, $id]);
 $outstanding = $totalBooked - $totalPaid;
+foreach ($transfers as $t) {
+    if ($t['to_customer_id'] == $id) $outstanding += (float)$t['amount'];
+    if ($t['from_customer_id'] == $id) $outstanding -= (float)$t['amount'];
+}
+
+$ledBookings = [];
+foreach ($bookings as $b) {
+    if ($ledgerStart !== '' && $b['booking_date'] < $ledgerStart) continue;
+    if ($ledgerEnd !== '' && $b['booking_date'] > $ledgerEnd) continue;
+    $ledBookings[] = $b;
+}
+$ledPayments = [];
+foreach ($paidRows as $pr) {
+    if ($ledgerStart !== '' && $pr['receipt_date'] < $ledgerStart) continue;
+    if ($ledgerEnd !== '' && $pr['receipt_date'] > $ledgerEnd) continue;
+    $ledPayments[] = $pr;
+}
+$ledTransfers = [];
+foreach ($transfers as $t) {
+    if ($ledgerStart !== '' && $t['transfer_date'] < $ledgerStart) continue;
+    if ($ledgerEnd !== '' && $t['transfer_date'] > $ledgerEnd) continue;
+    $ledTransfers[] = $t;
+}
+$openingBalance = 0.0;
+if ($ledgerStart !== '') {
+    $ob = (float)db_get("SELECT COALESCE(SUM(b.total_price - b.discount),0) amt FROM bookings b WHERE b.customer_id = ? AND b.status <> 'cancelled' AND b.booking_date < ?", [$id, $ledgerStart])['amt'];
+    $op = (float)db_get("SELECT COALESCE(SUM(amount),0) amt FROM receipts WHERE customer_id = ? AND receipt_date < ?", [$id, $ledgerStart])['amt'];
+    $ot = db_get("SELECT COALESCE(SUM(CASE WHEN to_customer_id = ? THEN amount WHEN from_customer_id = ? THEN -amount ELSE 0 END),0) amt
+                  FROM transfers WHERE transfer_type = 'customer_to_customer' AND (from_customer_id = ? OR to_customer_id = ?) AND transfer_date < ?", [$id, $id, $id, $id, $ledgerStart]);
+    $openingBalance = $ob - $op + (float)$ot['amt'];
+}
 
 include '../includes/header.php';
 ?>
@@ -122,26 +162,53 @@ include '../includes/header.php';
 
     <div class="tab-pane fade" id="cLedger">
         <div class="card">
-            <div class="card-body p-0">
+            <div class="card-body">
+                <form method="get" action="customer_view.php?id=<?= $id ?>#cLedger" class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <div class="input-group input-group-sm" style="max-width:170px">
+                        <span class="input-group-text"><i class="bi bi-calendar"></i></span>
+                        <input type="date" name="start_date" class="form-control" value="<?= e($ledgerStart) ?>">
+                    </div>
+                    <div class="input-group input-group-sm" style="max-width:170px">
+                        <span class="input-group-text"><i class="bi bi-calendar"></i></span>
+                        <input type="date" name="end_date" class="form-control" value="<?= e($ledgerEnd) ?>">
+                    </div>
+                    <button class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+                    <a href="customer_view.php?id=<?= $id ?>#cLedger" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+                </form>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead><tr><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
                         <tbody>
                         <?php
-                        $balance = 0.0;
-                        foreach ($bookings as $b) {
+                        $balance = $openingBalance;
+                        if ($ledgerStart !== '' || $ledgerEnd !== '') {
+                            echo '<tr><td>' . fmt_date($ledgerStart) . '</td><td>Opening Balance</td><td>-</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
+                        }
+                        foreach ($ledBookings as $b) {
                             $balance += (float)$b['total_price'] - (float)$b['discount'];
                             echo '<tr><td>' . fmt_date($b['booking_date']) . '</td><td>Booking ' . e($b['booking_no']) . ' - ' . e($b['property_no']) . '</td><td>' . fmt_money((float)$b['total_price'] - (float)$b['discount']) . '</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
                         }
-                        foreach ($paidRows as $pr) {
+                        foreach ($ledTransfers as $t) {
+                            if ($t['to_customer_id'] == $id) {
+                                $balance += (float)$t['amount'];
+                                echo '<tr><td>' . fmt_date($t['transfer_date']) . '</td><td>Transfer from ' . e($t['from_name'] ?? '-') . ' <a class="small" href="transfers.php">(' . e($t['transfer_no']) . ')</a></td><td>' . fmt_money((float)$t['amount']) . '</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
+                            } else {
+                                $balance -= (float)$t['amount'];
+                                echo '<tr><td>' . fmt_date($t['transfer_date']) . '</td><td>Transfer to ' . e($t['to_name'] ?? '-') . ' <a class="small" href="transfers.php">(' . e($t['transfer_no']) . ')</a></td><td>-</td><td>' . fmt_money((float)$t['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
+                            }
+                        }
+                        foreach ($ledPayments as $pr) {
                             $balance -= (float)$pr['amount'];
                             echo '<tr><td>' . fmt_date($pr['receipt_date']) . '</td><td>Payment ' . e($pr['receipt_no']) . '</td><td>-</td><td>' . fmt_money((float)$pr['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
+                        }
+                        if (!$ledBookings && !$ledTransfers && !$ledPayments && $ledgerStart === '' && $ledgerEnd === '') {
+                            echo '<tr><td colspan="5" class="text-center text-muted py-4">No ledger entries yet</td></tr>';
                         }
                         ?>
                         </tbody>
                         <tfoot>
                         <tr class="table-light">
-                            <td colspan="4" class="text-end fw-bold">Outstanding Balance</td>
+                            <td colspan="4" class="text-end fw-bold"><?= ($ledgerStart !== '' || $ledgerEnd !== '') ? 'Closing Balance' : 'Outstanding Balance' ?></td>
                             <td class="fw-bold"><?= fmt_money($balance) ?></td>
                         </tr>
                         </tfoot>
@@ -199,5 +266,13 @@ include '../includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+$(function () {
+    if (location.hash) {
+        $('.nav-pills .nav-link[data-bs-target="' + location.hash.replace(/[^a-zA-Z0-9_#]/g, '') + '"]').tab('show');
+    }
+});
+</script>
 
 <?php include '../includes/footer.php'; ?>

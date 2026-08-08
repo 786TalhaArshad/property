@@ -89,7 +89,12 @@ a { text-decoration: none; }
 
 .sidebar-nav .nav-link .chevron { margin-left: auto; font-size: 12px; transition: transform .2s; }
 
+.sidebar-nav .nav-item.active > .nav-link .chevron,
+.sidebar-nav .nav-link.open .chevron { transform: rotate(180deg); }
+
 .sidebar-nav .nav-item .collapse .nav-link { padding-left: 52px; font-size: 13px; }
+
+.sidebar-nav .collapse .nav-item .collapse .nav-link { padding-left: 68px; }
 
 /* ---------- Topbar ---------- */
 .main-area {

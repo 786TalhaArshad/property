@@ -38,7 +38,7 @@ include '../includes/header.php';
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover mb-0" id="dataTable">
-                <thead><tr><th style="width:50px">#</th><th>Booking</th><th>Customer</th><th>Property</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                <thead><tr><th style="width:50px">#</th><th>Booking</th><th>Customer</th><th>Property</th><th>Type</th><th>Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
                 <tbody>
                 <?php foreach ($records as $i => $r): ?>
                     <?php $paid = (float)$r['total_paid']; $total = (float)$r['total_price']; ?>
@@ -47,6 +47,7 @@ include '../includes/header.php';
                         <td class="fw-medium"><?= e($r['booking_no']) ?><?= $r['dealer_name'] ? '<div class="small text-muted">Dealer: ' . e($r['dealer_name']) . '</div>' : '' ?></td>
                         <td><?= e($r['customer_name']) ?></td>
                         <td><?= e($r['property_no']) ?></td>
+                        <td><?php $stb = ['cash' => 'success', 'installment' => 'info', 'cash_installment' => 'warning'][$r['sale_type']] ?? 'secondary'; ?><span class="badge bg-<?= $stb ?>"><?= e(ucfirst(str_replace('_', ' ', $r['sale_type']))) ?></span></td>
                         <td><?= fmt_date($r['booking_date']) ?></td>
                         <td><?= fmt_money($total) ?></td>
                         <td><?= fmt_money($paid) ?></td>
@@ -61,7 +62,7 @@ include '../includes/header.php';
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$records): ?>
-                    <tr><td colspan="10"><div class="empty-state"><i class="bi bi-journal-check"></i><p>No bookings yet</p></div></td></tr>
+                    <tr><td colspan="11"><div class="empty-state"><i class="bi bi-journal-check"></i><p>No bookings yet</p></div></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

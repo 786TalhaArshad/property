@@ -7,7 +7,7 @@ $active = 'bookings';
 $canEdit = has_permission('sales.manage');
 
 $id = (int)($_GET['id'] ?? 0);
-$booking = db_get("SELECT b.*, c.full_name AS customer_name, c.customer_no, c.cnic AS customer_cnic, c.phone AS customer_phone, p.property_no, p.address AS property_address, p.size_value, p.size_unit, d.full_name AS dealer_name
+$booking = db_get("SELECT b.*, c.full_name AS customer_name, c.customer_no, c.cnic AS customer_cnic, c.phone AS customer_phone, p.property_no, p.plot_no AS property_address, p.size_value, p.size_unit, d.full_name AS dealer_name
                    FROM bookings b
                    JOIN customers c ON c.id = b.customer_id
                    JOIN properties p ON p.id = b.property_id
@@ -68,6 +68,8 @@ include '../includes/header.php';
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
     <a href="bookings.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
     <h5 class="mb-0"><?= e($booking['booking_no']) ?></h5>
+    <?php $saleTypeBadge = ['cash' => 'success', 'installment' => 'info', 'cash_installment' => 'warning'][$booking['sale_type']] ?? 'secondary'; ?>
+    <span class="badge bg-<?= $saleTypeBadge ?>"><?= e(ucfirst(str_replace('_', ' ', $booking['sale_type']))) ?></span>
     <?= status_badge($booking['status']) ?>
     <?php if ($canEdit): ?><a class="btn btn-sm btn-outline-primary" href="booking_form.php?id=<?= $id ?>"><i class="bi bi-pencil"></i></a><?php endif; ?>
 </div>

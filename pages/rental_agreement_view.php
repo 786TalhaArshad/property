@@ -7,7 +7,7 @@ $active = 'rental_agreements';
 $canEdit = has_permission('rentals.manage');
 
 $id = (int)($_GET['id'] ?? 0);
-$agreement = db_get("SELECT ra.*, p.property_no, p.address AS property_address, t.full_name AS tenant_name, t.cnic AS tenant_cnic, o.full_name AS owner_name, d.full_name AS dealer_name
+$agreement = db_get("SELECT ra.*, p.property_no, p.plot_no AS property_address, t.full_name AS tenant_name, t.cnic AS tenant_cnic, o.full_name AS owner_name, d.full_name AS dealer_name
                      FROM rental_agreements ra
                      JOIN properties p ON p.id = ra.property_id
                      JOIN tenants t ON t.id = ra.tenant_id

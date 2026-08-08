@@ -169,7 +169,7 @@ function upload_file($field, $dir, $allowed = ['jpg', 'jpeg', 'png', 'gif', 'web
 }
 
 function next_number($prefix, $table, $column = 'id') {
-    $row = db_get("SELECT MAX(CAST(SUBSTRING($column, LENGTH(?) + 1) AS UNSIGNED)) AS max_no FROM $table WHERE $column LIKE CONCAT(?, '%')", [$prefix, $prefix]);
+    $row = db_get("SELECT MAX(CAST(SUBSTRING($column, LENGTH(?) + 2) AS UNSIGNED)) AS max_no FROM $table WHERE $column LIKE CONCAT(?, '%')", [$prefix, $prefix]);
     $n = (int)($row['max_no'] ?? 0) + 1;
     return $prefix . '-' . str_pad($n, 4, '0', STR_PAD_LEFT);
 }
@@ -177,6 +177,11 @@ function next_number($prefix, $table, $column = 'id') {
 function active_menu($key) {
     global $active;
     return isset($active) && $active === $key ? 'active' : '';
+}
+
+function submenu_state($keys) {
+    global $active;
+    return isset($active) && in_array($active, (array) $keys) ? 'active' : '';
 }
 
 function status_badge($status) {

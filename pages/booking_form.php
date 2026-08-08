@@ -8,7 +8,7 @@ $active = 'bookings';
 $id = (int)($_GET['id'] ?? 0);
 $record = null;
 if ($id > 0) {
-    $record = db_get("SELECT b.*, p.property_no, p.total_price AS prop_price, c.full_name AS customer_name, c.customer_no
+    $record = db_get("SELECT b.*, p.property_no, p.sale_price AS prop_price, c.full_name AS customer_name, c.customer_no
                       FROM bookings b
                       JOIN properties p ON p.id = b.property_id
                       JOIN customers c ON c.id = b.customer_id
@@ -32,6 +32,8 @@ if (is_post()) {
         $customer_id = (int)($_POST['customer_id'] ?? 0);
         $dealer_id = (int)($_POST['dealer_id'] ?? 0) ?: null;
         $booking_date = $_POST['booking_date'] ?? date('Y-m-d');
+        $sale_type = $_POST['sale_type'] ?? 'installment';
+        if (!in_array($sale_type, ['cash', 'installment', 'cash_installment'])) $sale_type = 'installment';
         $total_price = (float)($_POST['total_price'] ?? 0);
         $discount = (float)($_POST['discount'] ?? 0);
         $token_amount = (float)($_POST['token_amount'] ?? 0);
@@ -41,11 +43,16 @@ if (is_post()) {
         $installment_plan = $_POST['installment_plan'] ?? 'monthly';
         $installment_years = (int)($_POST['installment_years'] ?? 1) ?: 1;
         $status = $_POST['status'] ?? 'booking';
+        $payment_method_id = (int)($_POST['payment_method_id'] ?? 0) ?: null;
+        $bank_id = (int)($_POST['bank_id'] ?? 0) ?: null;
+        $reference = trim($_POST['reference'] ?? '');
 
         if ($property_id <= 0 || $customer_id <= 0) {
             flash('danger', 'Property and customer are required.');
         } elseif ($total_price <= 0) {
             flash('danger', 'Total price must be greater than zero.');
+        } elseif ($sale_type === 'cash' && ($token_amount + $booking_amount) < ($total_price - $discount)) {
+            flash('danger', 'Cash sale requires full payment: Token + Booking amount must equal the total after discount.');
         } else {
             $current = db_get("SELECT status FROM properties WHERE id = ?", [$property_id]);
             if (!$current) {
@@ -54,20 +61,26 @@ if (is_post()) {
                 flash('danger', 'Selected property is not available for booking.');
             } else {
                 if ($id > 0) {
-                    db_exec("UPDATE bookings SET booking_no=?, quotation_id=?, property_id=?, customer_id=?, dealer_id=?, booking_date=?, total_price=?, discount=?, token_amount=?, booking_amount=?, possession_charges=?, transfer_charges=?, installment_plan=?, installment_years=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?",
-                        [$booking_no, $quotation_id, $property_id, $customer_id, $dealer_id, $booking_date, $total_price, $discount, $token_amount, $booking_amount, $possession_charges, $transfer_charges, $installment_plan, $installment_years, $status, $id]);
+                    db_exec("UPDATE bookings SET booking_no=?, quotation_id=?, property_id=?, customer_id=?, dealer_id=?, booking_date=?, sale_type=?, total_price=?, discount=?, token_amount=?, booking_amount=?, possession_charges=?, transfer_charges=?, installment_plan=?, installment_years=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?",
+                        [$booking_no, $quotation_id, $property_id, $customer_id, $dealer_id, $booking_date, $sale_type, $total_price, $discount, $token_amount, $booking_amount, $possession_charges, $transfer_charges, $installment_plan, $installment_years, $status, $id]);
                     flash('success', 'Booking updated successfully.');
                     redirect('booking_view.php?id=' . $id);
                 }
 
-                $booking_id = db_exec("INSERT INTO bookings (booking_no, quotation_id, property_id, customer_id, dealer_id, booking_date, total_price, discount, token_amount, booking_amount, possession_charges, transfer_charges, installment_plan, installment_years, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-                    [$booking_no, $quotation_id, $property_id, $customer_id, $dealer_id, $booking_date, $total_price, $discount, $token_amount, $booking_amount, $possession_charges, $transfer_charges, $installment_plan, $installment_years, $status]);
+                $booking_id = db_exec("INSERT INTO bookings (booking_no, quotation_id, property_id, customer_id, dealer_id, booking_date, sale_type, total_price, discount, token_amount, booking_amount, possession_charges, transfer_charges, installment_plan, installment_years, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                    [$booking_no, $quotation_id, $property_id, $customer_id, $dealer_id, $booking_date, $sale_type, $total_price, $discount, $token_amount, $booking_amount, $possession_charges, $transfer_charges, $installment_plan, $installment_years, $status]);
 
                 $no = 1;
                 $book = $token_amount + $booking_amount;
+                $bookingInstId = null;
                 if ($book > 0) {
-                    db_exec("INSERT INTO installments (booking_id, installment_no, installment_type, due_date, amount, penalty, paid_amount, status, paid_date, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,0,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                    $bookingInstId = db_exec("INSERT INTO installments (booking_id, installment_no, installment_type, due_date, amount, penalty, paid_amount, status, paid_date, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,0,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
                         [$booking_id, $no++, 'booking', $booking_date, $book, $book, 'paid', $booking_date, $user['id']]);
+
+                    $receipt_no = next_number('RCT', 'receipts', 'receipt_no');
+                    $remarks = $sale_type === 'cash' ? 'Full cash sale' : 'Booking amount';
+                    db_exec("INSERT INTO receipts (receipt_no, receipt_date, customer_id, booking_id, installment_id, amount, payment_method_id, bank_id, reference, remarks, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                        [$receipt_no, $booking_date, $customer_id, $booking_id, $bookingInstId, $book, $payment_method_id, $bank_id, $reference, $remarks, $user['id']]);
                 }
                 if ($possession_charges > 0) {
                     db_exec("INSERT INTO installments (booking_id, installment_no, installment_type, due_date, amount, penalty, paid_amount, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,0,0,'pending',CURDATE(),CURTIME(),CURDATE(),CURTIME())",
@@ -89,8 +102,11 @@ if (is_post()) {
                     }
                 }
 
-                db_exec("UPDATE properties SET status = 'booked', updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$property_id]);
-                flash('success', 'Booking created and installment plan generated.');
+                $propStatus = $sale_type === 'cash' ? 'sold' : 'booked';
+                $bookStatus = $sale_type === 'cash' ? 'completed' : $status;
+                db_exec("UPDATE bookings SET status = ?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$bookStatus, $booking_id]);
+                db_exec("UPDATE properties SET status = ?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$propStatus, $property_id]);
+                flash('success', 'Booking created. ' . ($sale_type === 'cash' ? 'Cash sale completed.' : 'Installment plan generated.'));
                 redirect('booking_view.php?id=' . $booking_id);
             }
         }
@@ -106,6 +122,8 @@ $customers = db_all("SELECT * FROM customers WHERE status = 1 ORDER BY full_name
 $properties = db_all("SELECT p.*, pt.name AS type_name, pr.name AS project_name FROM properties p LEFT JOIN property_types pt ON pt.id = p.property_type_id LEFT JOIN projects pr ON pr.id = p.project_id WHERE p.status IN ('available','reserved') ORDER BY p.property_no");
 $dealers = db_all("SELECT * FROM dealers WHERE status = 1 ORDER BY full_name");
 $quotations = db_all("SELECT * FROM quotations WHERE status IN ('sent','accepted') ORDER BY quotation_no DESC");
+$paymentMethods = db_all("SELECT * FROM payment_methods ORDER BY name");
+$banks = db_all("SELECT * FROM banks ORDER BY name");
 
 $total_price = $record ? $record['total_price'] : 0;
 include '../includes/header.php';
@@ -132,6 +150,14 @@ include '../includes/header.php';
                     <input type="date" name="booking_date" class="form-control" value="<?= e($record['booking_date'] ?? date('Y-m-d')) ?>" required>
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label">Sale Type</label>
+                    <select name="sale_type" id="fSaleType" class="form-select">
+                        <option value="installment" <?= $record && $record['sale_type'] === 'installment' ? 'selected' : '' ?>>Installment</option>
+                        <option value="cash" <?= $record && $record['sale_type'] === 'cash' ? 'selected' : '' ?>>Cash</option>
+                        <option value="cash_installment" <?= $record && $record['sale_type'] === 'cash_installment' ? 'selected' : '' ?>>Cash + Installment</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Quotation (optional)</label>
                     <select name="quotation_id" class="form-select">
                         <option value="">None</option>
@@ -151,7 +177,7 @@ include '../includes/header.php';
                     <select name="property_id" class="form-select" id="selProperty" required <?= $id > 0 ? 'disabled' : '' ?>>
                         <option value="">Select Property</option>
                         <?php foreach ($properties as $p): ?>
-                            <option value="<?= $p['id'] ?>" data-price="<?= (float)$p['total_price'] ?>" <?= $record && $record['property_id'] == $p['id'] ? 'selected' : '' ?>><?= e($p['property_no']) ?> - <?= e($p['project_name'] ?? '-') ?> (<?= e($p['type_name'] ?? '-') ?>)</option>
+                            <option value="<?= $p['id'] ?>" data-price="<?= (float)$p['sale_price'] ?>" <?= $record && $record['property_id'] == $p['id'] ? 'selected' : '' ?>><?= e($p['property_no']) ?> - <?= e($p['project_name'] ?? '-') ?> (<?= e($p['type_name'] ?? '-') ?>)</option>
                         <?php endforeach; ?>
                     </select>
                     <?php if ($id > 0): ?><input type="hidden" name="property_id" value="<?= $record['property_id'] ?>"><?php endif; ?>
@@ -225,6 +251,33 @@ include '../includes/header.php';
         </div>
     </div>
 
+    <div class="card mt-3">
+        <div class="card-header"><i class="bi bi-cash-coin me-2"></i>Upfront Payment</div>
+        <div class="card-body">
+            <p class="small text-muted mb-3">Booking / cash amount ke liye auto-receipt bane gi. Installment sales me bhi booking amount ka receipt banta hai.</p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Payment Method</label>
+                    <select name="payment_method_id" class="form-select">
+                        <option value="">Select</option>
+                        <?php foreach ($paymentMethods as $pm): ?><option value="<?= $pm['id'] ?>"><?= e($pm['name']) ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Bank (optional)</label>
+                    <select name="bank_id" class="form-select">
+                        <option value="">Select</option>
+                        <?php foreach ($banks as $b): ?><option value="<?= $b['id'] ?>"><?= e($b['name']) ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Reference (optional)</label>
+                    <input type="text" name="reference" class="form-control" placeholder="Cheque no / ref">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="mt-3 d-flex gap-2">
         <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i><?= $record ? 'Update Booking' : 'Save Booking' ?></button>
         <a href="bookings.php" class="btn btn-light">Cancel</a>
@@ -259,6 +312,7 @@ include '../includes/header.php';
         token = document.getElementById('fToken'), booking = document.getElementById('fBooking'),
         possess = document.getElementById('fPossession'), transfer = document.getElementById('fTransfer'),
         plan = document.getElementById('fPlan'), years = document.getElementById('fYears'),
+        saleType = document.getElementById('fSaleType'),
         per = document.getElementById('calcPer'), count = document.getElementById('calcCount'),
         sel = document.getElementById('selProperty');
     if (sel) {
@@ -268,12 +322,20 @@ include '../includes/header.php';
             calc();
         });
     }
+    function isCash() { return saleType && saleType.value === 'cash'; }
     function calc() {
         var t = parseFloat(total.value) || 0, d = parseFloat(discount.value) || 0,
             tok = parseFloat(token.value) || 0, bk = parseFloat(booking.value) || 0,
             po = parseFloat(possess.value) || 0, tr = parseFloat(transfer.value) || 0,
             mult = { monthly: 12, quarterly: 4, half_yearly: 2, yearly: 1, lump_sum: 1 }[plan.value] || 12,
             yrs = parseInt(years.value) || 1;
+        if (plan) plan.disabled = isCash();
+        if (years) years.disabled = isCash();
+        if (isCash()) {
+            per.textContent = '-';
+            count.textContent = 'Full payment on booking';
+            return;
+        }
         var remain = t - d - tok - bk - po - tr;
         if (remain <= 0) {
             per.textContent = '-';
@@ -284,9 +346,11 @@ include '../includes/header.php';
             count.textContent = ' x ' + n + ' ' + (n > 1 ? 'installments' : 'installment');
         }
     }
-    [total, discount, token, booking, possess, transfer, plan, years].forEach(function (el) {
-        el.addEventListener('input', calc);
-        el.addEventListener('change', calc);
+    [total, discount, token, booking, possess, transfer, plan, years, saleType].forEach(function (el) {
+        if (el) {
+            el.addEventListener('input', calc);
+            el.addEventListener('change', calc);
+        }
     });
     calc();
 })();

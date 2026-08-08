@@ -89,6 +89,9 @@ if (is_post()) {
             <div class="text-center mt-4 text-muted small">
                 Default login: <strong>admin</strong> / <strong>admin123</strong>
             </div>
+            <div class="text-center mt-2">
+                <a href="<?= BASE_URL ?>/tour_guide.php" class="small"><i class="bi bi-compass me-1"></i>Learn how to use this software</a>
+            </div>
         </div>
     </div>
 </div>

@@ -487,6 +487,91 @@ CREATE TABLE IF NOT EXISTS dealer_payments (
   CONSTRAINT fk_dp_dealer FOREIGN KEY (dealer_id) REFERENCES dealers (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS vendors (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  vendor_no VARCHAR(40) NOT NULL,
+  business_name VARCHAR(180) DEFAULT NULL,
+  contact_person VARCHAR(180) DEFAULT NULL,
+  cnic VARCHAR(40) DEFAULT NULL,
+  phone VARCHAR(40) DEFAULT NULL,
+  whatsapp VARCHAR(40) DEFAULT NULL,
+  email VARCHAR(120) DEFAULT NULL,
+  address VARCHAR(255) DEFAULT NULL,
+  city_id INT UNSIGNED DEFAULT NULL,
+  bank_id INT UNSIGNED DEFAULT NULL,
+  bank_account_title VARCHAR(150) DEFAULT NULL,
+  bank_account_no VARCHAR(80) DEFAULT NULL,
+  status TINYINT(1) NOT NULL DEFAULT 1,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_vendors_no (vendor_no),
+  KEY idx_vendors_city (city_id),
+  CONSTRAINT fk_vendors_bank FOREIGN KEY (bank_id) REFERENCES banks (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS vendor_payments (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  vendor_id INT UNSIGNED NOT NULL,
+  payment_date DATE NOT NULL,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  payment_method_id INT UNSIGNED DEFAULT NULL,
+  bank_id INT UNSIGNED DEFAULT NULL,
+  reference VARCHAR(80) DEFAULT NULL,
+  remarks VARCHAR(255) DEFAULT NULL,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_vp_vendor (vendor_id),
+  CONSTRAINT fk_vp_vendor FOREIGN KEY (vendor_id) REFERENCES vendors (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS general_parties (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  party_no VARCHAR(40) NOT NULL,
+  party_name VARCHAR(180) NOT NULL,
+  contact_person VARCHAR(180) DEFAULT NULL,
+  phone VARCHAR(40) DEFAULT NULL,
+  whatsapp VARCHAR(40) DEFAULT NULL,
+  email VARCHAR(120) DEFAULT NULL,
+  address VARCHAR(255) DEFAULT NULL,
+  status TINYINT(1) NOT NULL DEFAULT 1,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_gp_no (party_no)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS general_party_entries (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  party_id INT UNSIGNED NOT NULL,
+  entry_no VARCHAR(40) NOT NULL,
+  entry_date DATE NOT NULL,
+  entry_type ENUM('payable','paid','receiving') NOT NULL,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  narration VARCHAR(255) DEFAULT NULL,
+  account_id INT UNSIGNED DEFAULT NULL,
+  voucher_id INT UNSIGNED DEFAULT NULL,
+  created_by INT UNSIGNED DEFAULT NULL,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_gpe_no (entry_no),
+  KEY idx_gpe_party (party_id),
+  KEY idx_gpe_date (entry_date),
+  KEY idx_gpe_type (entry_type),
+  CONSTRAINT fk_gpe_party FOREIGN KEY (party_id) REFERENCES general_parties (id) ON DELETE CASCADE,
+  CONSTRAINT fk_gpe_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- ===================== PROPERTIES =====================
 
 CREATE TABLE IF NOT EXISTS properties (
@@ -619,6 +704,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   customer_id INT UNSIGNED NOT NULL,
   dealer_id INT UNSIGNED DEFAULT NULL,
   booking_date DATE NOT NULL,
+  sale_type ENUM('cash','installment','cash_installment') NOT NULL DEFAULT 'installment',
   total_price DECIMAL(14,2) NOT NULL DEFAULT 0.00,
   discount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   token_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
@@ -997,6 +1083,41 @@ CREATE TABLE IF NOT EXISTS voucher_items (
   CONSTRAINT fk_vi_account FOREIGN KEY (account_id) REFERENCES chart_of_accounts (id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS transfers (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  transfer_no VARCHAR(40) NOT NULL,
+  transfer_date DATE NOT NULL,
+  transfer_type ENUM('customer_to_customer','bank_to_cash','bank_to_bank','customer_withdraw','owner_withdraw') NOT NULL,
+  from_customer_id INT UNSIGNED DEFAULT NULL,
+  to_customer_id INT UNSIGNED DEFAULT NULL,
+  from_bank_id INT UNSIGNED DEFAULT NULL,
+  to_bank_id INT UNSIGNED DEFAULT NULL,
+  booking_id INT UNSIGNED DEFAULT NULL,
+  account_id INT UNSIGNED DEFAULT NULL,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  narration VARCHAR(255) DEFAULT NULL,
+  voucher_id INT UNSIGNED DEFAULT NULL,
+  created_by INT UNSIGNED DEFAULT NULL,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_transfer_no (transfer_no),
+  KEY idx_tr_date (transfer_date),
+  KEY idx_tr_type (transfer_type),
+  KEY idx_tr_from_customer (from_customer_id),
+  KEY idx_tr_to_customer (to_customer_id),
+  KEY idx_tr_booking (booking_id),
+  CONSTRAINT fk_tr_from_customer FOREIGN KEY (from_customer_id) REFERENCES customers (id) ON DELETE SET NULL,
+  CONSTRAINT fk_tr_to_customer FOREIGN KEY (to_customer_id) REFERENCES customers (id) ON DELETE SET NULL,
+  CONSTRAINT fk_tr_from_bank FOREIGN KEY (from_bank_id) REFERENCES banks (id) ON DELETE SET NULL,
+  CONSTRAINT fk_tr_to_bank FOREIGN KEY (to_bank_id) REFERENCES banks (id) ON DELETE SET NULL,
+  CONSTRAINT fk_tr_booking FOREIGN KEY (booking_id) REFERENCES bookings (id) ON DELETE SET NULL,
+  CONSTRAINT fk_tr_account FOREIGN KEY (account_id) REFERENCES chart_of_accounts (id) ON DELETE SET NULL,
+  CONSTRAINT fk_tr_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- ===================== CRM =====================
 
 CREATE TABLE IF NOT EXISTS leads (
@@ -1181,7 +1302,11 @@ INSERT INTO permissions (id, module, slug, name, created_date, created_time, upd
 (27, 'Documents',   'documents.view',      'View Documents',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (28, 'Reports',     'reports.view',        'View Reports',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (29, 'Settings',    'settings.manage',     'Manage Settings',     CURDATE(), CURTIME(), CURDATE(), CURTIME()),
-(30, 'Notifications','notifications.view', 'View Notifications',  CURDATE(), CURTIME(), CURDATE(), CURTIME());
+(30, 'Notifications','notifications.view', 'View Notifications',  CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(31, 'Vendors',     'vendors.view',        'View Vendors',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(32, 'Vendors',     'vendors.manage',      'Manage Vendors',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(33, 'General Parties','general_parties.view',  'View General Parties',  CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(34, 'General Parties','general_parties.manage','Manage General Parties', CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 INSERT INTO role_permissions (role_id, permission_id, created_date, created_time, updated_date, updated_time)
 SELECT 1, id, CURDATE(), CURTIME(), CURDATE(), CURTIME() FROM permissions;

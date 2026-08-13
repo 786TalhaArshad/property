@@ -73,6 +73,31 @@ function is_logged_in() {
     return isset($_SESSION['user_id']);
 }
 
+function active_project_id() {
+    return (int)($_SESSION['active_project_id'] ?? 0);
+}
+
+function active_project() {
+    $id = active_project_id();
+    return $id ? db_get("SELECT * FROM projects WHERE id = ? AND status = 1", [$id]) : null;
+}
+
+function set_active_project($id) {
+    $id = (int)$id;
+    if ($id > 0) {
+        $p = db_get("SELECT id FROM projects WHERE id = ? AND status = 1", [$id]);
+        if (!$p) {
+            return false;
+        }
+    }
+    $_SESSION['active_project_id'] = $id;
+    return true;
+}
+
+function active_project_field($record_project_id, $edit_id) {
+    return $edit_id > 0 ? (int)$record_project_id : active_project_id();
+}
+
 function current_user() {
     global $user;
     return $user;

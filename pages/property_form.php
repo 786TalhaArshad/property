@@ -23,7 +23,8 @@ if (is_post()) {
     $factory_no = trim($_POST['factory_no'] ?? '');
     $farm_house_no = trim($_POST['farm_house_no'] ?? '');
     $hall_no = trim($_POST['hall_no'] ?? '');
-    $project_id = (int)($_POST['project_id'] ?? 0) ?: null;
+    $project_id = $id > 0 ? (int)($record['project_id'] ?? 0) : active_project_id();
+    $project_id = $project_id ?: null;
     $block_id = (int)($_POST['block_id'] ?? 0) ?: null;
     $road_id = (int)($_POST['road_id'] ?? 0) ?: null;
     $street_id = (int)($_POST['street_id'] ?? 0) ?: null;
@@ -68,7 +69,8 @@ $categories = db_all("SELECT * FROM property_categories ORDER BY name");
 $owners = db_all("SELECT * FROM owners ORDER BY full_name");
 $customers = db_all("SELECT * FROM customers ORDER BY full_name");
 
-$selProject = $record['project_id'] ?? 0;
+$selProject = $record['project_id'] ?? active_project_id();
+$selProject = (int)$selProject;
 $blocks = $selProject ? db_all("SELECT * FROM blocks WHERE project_id = ? ORDER BY name", [$selProject]) : [];
 $roads = $selProject ? db_all("SELECT * FROM roads WHERE project_id = ? ORDER BY name", [$selProject]) : [];
 $streets = $selProject ? db_all("SELECT * FROM streets WHERE project_id = ? ORDER BY name", [$selProject]) : [];
@@ -147,10 +149,11 @@ include '../includes/header.php';
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Project</label>
-                            <select name="project_id" class="form-select" id="projectSelect">
+                            <select name="project_id" class="form-select" id="projectSelect" disabled>
                                 <option value="">Select project</option>
                                 <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= $selProject === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
                             </select>
+                            <div class="form-text">Locked to the active project selected in the header.</div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Block</label>

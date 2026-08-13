@@ -2,8 +2,25 @@
 require_once '../includes/auth.php';
 require_login();
 require_permission('accounting.manage');
-$title = 'New Voucher';
 $active = 'vouchers';
+
+$edit_id = (int)($_GET['id'] ?? 0);
+$record = null;
+if ($edit_id > 0) {
+    $record = db_get("SELECT * FROM vouchers WHERE id = ?", [$edit_id]);
+    if (!$record) {
+        flash('danger', 'Voucher not found.');
+        redirect('vouchers.php');
+    }
+    $title = 'Edit Voucher - ' . $record['voucher_no'];
+    $recordLines = db_all("SELECT * FROM voucher_items WHERE voucher_id = ? ORDER BY id", [$edit_id]);
+} else {
+    $title = 'New Voucher';
+    $recordLines = [];
+}
+
+$project_id = $edit_id > 0 ? (int)($record['project_id'] ?? 0) : active_project_id();
+$project_id = $project_id ?: null;
 
 if (is_post()) {
     csrf_check();
@@ -34,7 +51,7 @@ if (is_post()) {
         }
         if ($d > 0 && $c > 0) {
             flash('danger', 'Line ' . ($i + 1) . ': a line cannot have both debit and credit.');
-            redirect('voucher_form.php');
+            redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
         }
         $lines[] = [$acc, trim($descriptions[$i] ?? ''), $d, $c];
         $totalDebit += $d;
@@ -43,14 +60,20 @@ if (is_post()) {
 
     if (!$lines) {
         flash('danger', 'Add at least one entry line.');
-        redirect('voucher_form.php');
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
     }
     if (abs($totalDebit - $totalCredit) > 0.01) {
         flash('danger', 'Debit total (' . fmt_money($totalDebit) . ') must equal credit total (' . fmt_money($totalCredit) . ').');
-        redirect('voucher_form.php');
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
     }
 
-    $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$voucher_no, $voucher_date, $voucher_type, $narration, $status, $user['id']]);
+    if ($edit_id > 0) {
+        db_exec("UPDATE vouchers SET voucher_no=?, voucher_date=?, voucher_type=?, project_id=?, narration=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$voucher_no, $voucher_date, $voucher_type, $project_id, $narration, $status, $edit_id]);
+        db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$edit_id]);
+        $vid = $edit_id;
+    } else {
+        $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, project_id, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$voucher_no, $voucher_date, $voucher_type, $project_id, $narration, $status, $user['id']]);
+    }
     foreach ($lines as $line) {
         db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$vid, $line[0], $line[1], $line[2], $line[3]]);
     }
@@ -59,12 +82,13 @@ if (is_post()) {
 }
 
 $accounts = db_all("SELECT * FROM chart_of_accounts ORDER BY account_type, code");
+$projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
 include '../includes/header.php';
 ?>
 
 <div class="d-flex align-items-center gap-2 mb-3">
     <a href="vouchers.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
-    <h5 class="mb-0">New Voucher</h5>
+    <h5 class="mb-0"><?= $edit_id > 0 ? 'Edit Voucher' : 'New Voucher' ?></h5>
 </div>
 
 <form method="post" id="voucherForm">
@@ -75,32 +99,40 @@ include '../includes/header.php';
             <div class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">Voucher No</label>
-                    <input type="text" name="voucher_no" class="form-control" placeholder="Auto">
+                    <input type="text" name="voucher_no" class="form-control" placeholder="Auto" value="<?= e($record['voucher_no'] ?? '') ?>">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Date</label>
-                    <input type="date" name="voucher_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    <input type="date" name="voucher_date" class="form-control" value="<?= e($record['voucher_date'] ?? date('Y-m-d')) ?>" required>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Type</label>
                     <select name="voucher_type" class="form-select">
-                        <option value="cash_payment">Cash Payment</option>
-                        <option value="cash_receipt">Cash Receipt</option>
-                        <option value="bank_payment">Bank Payment</option>
-                        <option value="bank_receipt">Bank Receipt</option>
-                        <option value="journal">Journal</option>
+                        <option value="cash_payment" <?= ($record['voucher_type'] ?? '') === 'cash_payment' ? 'selected' : '' ?>>Cash Payment</option>
+                        <option value="cash_receipt" <?= ($record['voucher_type'] ?? '') === 'cash_receipt' ? 'selected' : '' ?>>Cash Receipt</option>
+                        <option value="bank_payment" <?= ($record['voucher_type'] ?? '') === 'bank_payment' ? 'selected' : '' ?>>Bank Payment</option>
+                        <option value="bank_receipt" <?= ($record['voucher_type'] ?? '') === 'bank_receipt' ? 'selected' : '' ?>>Bank Receipt</option>
+                        <option value="journal" <?= ($record['voucher_type'] ?? '') === 'journal' ? 'selected' : '' ?>>Journal</option>
                     </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Project</label>
+                    <select name="project_id" class="form-select" disabled>
+                        <option value="">-- General / No Project --</option>
+                        <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= (int)$project_id === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
+                    </select>
+                    <div class="form-text">Locked to the active project selected in the header.</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Status</label>
                     <select name="status" class="form-select">
-                        <option value="posted">Posted</option>
-                        <option value="draft">Draft</option>
+                        <option value="posted" <?= ($record['status'] ?? '') === 'posted' ? 'selected' : '' ?>>Posted</option>
+                        <option value="draft" <?= ($record['status'] ?? '') === 'draft' ? 'selected' : '' ?>>Draft</option>
                     </select>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Narration</label>
-                    <input type="text" name="narration" class="form-control">
+                    <input type="text" name="narration" class="form-control" value="<?= e($record['narration'] ?? '') ?>">
                 </div>
             </div>
         </div>
@@ -121,17 +153,19 @@ include '../includes/header.php';
                     </tr>
                     </thead>
                     <tbody>
-                    <?php for ($i = 0; $i < 4; $i++): ?>
+                    <?php $emptyRows = max(4, count($recordLines)); ?>
+                    <?php for ($i = 0; $i < $emptyRows; $i++): ?>
+                        <?php $line = $recordLines[$i] ?? null; ?>
                         <tr>
                             <td>
                                 <select name="account_id[]" class="form-select form-select-sm">
                                     <option value="">Select Account</option>
-                                    <?php foreach ($accounts as $a): ?><option value="<?= $a['id'] ?>"><?= e($a['code']) ?> - <?= e($a['name']) ?></option><?php endforeach; ?>
+                                    <?php foreach ($accounts as $a): ?><option value="<?= $a['id'] ?>" <?= $line && (int)$line['account_id'] === (int)$a['id'] ? 'selected' : '' ?>><?= e($a['code']) ?> - <?= e($a['name']) ?></option><?php endforeach; ?>
                                 </select>
                             </td>
-                            <td><input type="text" name="item_description[]" class="form-control form-control-sm"></td>
-                            <td><input type="number" step="0.01" name="debit[]" class="form-control form-control-sm line-debit" value="0" data-mask-money></td>
-                            <td><input type="number" step="0.01" name="credit[]" class="form-control form-control-sm line-credit" value="0" data-mask-money></td>
+                            <td><input type="text" name="item_description[]" class="form-control form-control-sm" value="<?= e($line['item_description'] ?? '') ?>"></td>
+                            <td><input type="number" step="0.01" name="debit[]" class="form-control form-control-sm line-debit" value="<?= $line ? (float)$line['debit'] : 0 ?>" data-mask-money></td>
+                            <td><input type="number" step="0.01" name="credit[]" class="form-control form-control-sm line-credit" value="<?= $line ? (float)$line['credit'] : 0 ?>" data-mask-money></td>
                             <td><button type="button" class="btn btn-sm btn-outline-danger btn-del-line"><i class="bi bi-x-lg"></i></button></td>
                         </tr>
                     <?php endfor; ?>
@@ -154,7 +188,7 @@ include '../includes/header.php';
     </div>
 
     <div class="mt-3 d-flex gap-2">
-        <button class="btn btn-primary" type="submit" id="btnSave"><i class="bi bi-check-lg me-1"></i>Save Voucher</button>
+        <button class="btn btn-primary" type="submit" id="btnSave"><i class="bi bi-check-lg me-1"></i><?= $edit_id > 0 ? 'Update Voucher' : 'Save Voucher' ?></button>
         <a href="vouchers.php" class="btn btn-light">Cancel</a>
     </div>
 </form>

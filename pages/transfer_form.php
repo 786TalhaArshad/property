@@ -2,8 +2,32 @@
 require_once '../includes/auth.php';
 require_login();
 require_permission('accounting.manage');
-$title = 'New Transfer / Withdraw';
 $active = 'transfers';
+
+$edit_id = (int)($_GET['id'] ?? 0);
+$record = null;
+if ($edit_id > 0) {
+    $record = db_get("SELECT * FROM transfers WHERE id = ?", [$edit_id]);
+    if (!$record) {
+        flash('danger', 'Transfer not found.');
+        redirect('transfers.php');
+    }
+    if ($record['transfer_type'] === 'customer_withdraw') {
+        flash('danger', 'A booking withdraw cannot be edited.');
+        redirect('transfers.php');
+    }
+    $title = 'Edit Transfer - ' . $record['transfer_no'];
+} else {
+    $title = 'New Transfer / Withdraw';
+}
+
+$wFrom = 'cash';
+if ($record && $record['account_id']) {
+    $wa = db_get("SELECT code FROM chart_of_accounts WHERE id = ?", [$record['account_id']]);
+    if ($wa && preg_match('/^1001-(\d+)$/', $wa['code'], $wm)) {
+        $wFrom = 'bank:' . (int)$wm[1];
+    }
+}
 
 function bank_account_id($bank_id) {
     $bank = db_get("SELECT * FROM banks WHERE id = ?", [$bank_id]);
@@ -20,16 +44,19 @@ function bank_account_id($bank_id) {
         [$code, $bank['name'], 'asset', $parent ? (int)$parent['id'] : null]);
 }
 
-function post_transfer_voucher($date, $narration, $lines) {
+function post_transfer_voucher($date, $narration, $lines, $project_id = null) {
     $voucher_no = next_number('JV', 'vouchers', 'voucher_no');
-    $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-        [$voucher_no, $date, 'journal', $narration, 'posted', $GLOBALS['user']['id']]);
+    $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, project_id, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+        [$voucher_no, $date, 'journal', $project_id, $narration, 'posted', $GLOBALS['user']['id']]);
     foreach ($lines as $l) {
         db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
             [$vid, $l[0], $l[1], $l[2], $l[3]]);
     }
     return $vid;
 }
+
+$project_id = $edit_id > 0 ? (int)($record['project_id'] ?? 0) : active_project_id();
+$project_id = $project_id ?: null;
 
 if (is_post()) {
     csrf_check();
@@ -39,7 +66,7 @@ if (is_post()) {
     $narration = trim($_POST['narration'] ?? '');
     $transfer_no = trim($_POST['transfer_no'] ?? '');
     if ($transfer_no === '') {
-        $transfer_no = next_number('TR', 'transfers', 'transfer_no');
+        $transfer_no = $edit_id > 0 ? $record['transfer_no'] : next_number('TR', 'transfers', 'transfer_no');
     }
     $valid = in_array($type, ['customer_to_customer', 'bank_to_cash', 'bank_to_bank', 'customer_withdraw', 'owner_withdraw'], true);
     if (!$valid) {
@@ -93,7 +120,7 @@ if (is_post()) {
         $voucherId = post_transfer_voucher($date, $narr, [
             [(int)$cashAcc['id'], 'Cash withdrawal from bank', $amount, 0],
             [$bankAcc, 'Cash withdrawal from bank', 0, $amount],
-        ]);
+        ], $project_id);
         $ok = true;
     } elseif ($type === 'bank_to_bank') {
         if (!$fromBank || !$toBank) {
@@ -118,7 +145,7 @@ if (is_post()) {
         $voucherId = post_transfer_voucher($date, $narr, [
             [$toAcc, 'Bank to bank transfer', $amount, 0],
             [$fromAcc, 'Bank to bank transfer', 0, $amount],
-        ]);
+        ], $project_id);
         $ok = true;
     } elseif ($type === 'customer_withdraw') {
         $custId = (int)($_POST['customer_id'] ?? 0);
@@ -135,8 +162,8 @@ if (is_post()) {
         $narr = $narration !== '' ? $narration : 'Booking withdraw ' . $booking['booking_no'];
         db_exec("UPDATE bookings SET status = 'cancelled', updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$bookingId]);
         db_exec("UPDATE properties SET status = 'available', updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$booking['property_id']]);
-        db_exec("INSERT INTO transfers (transfer_no, transfer_date, transfer_type, from_customer_id, booking_id, amount, narration, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-            [$transfer_no, $date, $type, $custId, $bookingId, $paid, $narr, $user['id']]);
+        db_exec("INSERT INTO transfers (transfer_no, transfer_date, transfer_type, project_id, from_customer_id, booking_id, amount, narration, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$transfer_no, $date, $type, $project_id, $custId, $bookingId, $paid, $narr, $user['id']]);
         flash('success', 'Booking withdrawn and property released. Refundable amount: ' . fmt_money($paid));
         redirect('transfers.php');
     } elseif ($type === 'owner_withdraw') {
@@ -179,26 +206,36 @@ if (is_post()) {
         $voucherId = post_transfer_voucher($date, $narr, [
             [(int)$equity['id'], 'Owner / partner withdrawal', $amount, 0],
             [$fromAcc, 'Owner / partner withdrawal', 0, $amount],
-        ]);
+        ], $project_id);
         $ok = true;
     }
 
     if ($ok) {
-        db_exec("INSERT INTO transfers (transfer_no, transfer_date, transfer_type, from_customer_id, to_customer_id, from_bank_id, to_bank_id, booking_id, account_id, amount, narration, voucher_id, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-            [$transfer_no, $date, $type, $fromCust, $toCust, $fromBank, $toBank, $bookingId, $fromAcc ?? null, $amount, $narr, $voucherId, $user['id']]);
-        flash('success', 'Transfer ' . $transfer_no . ' saved.');
+        if ($edit_id > 0) {
+            if ($record['voucher_id']) {
+                db_exec("DELETE FROM vouchers WHERE id = ?", [$record['voucher_id']]);
+            }
+            db_exec("UPDATE transfers SET transfer_no=?, transfer_date=?, transfer_type=?, project_id=?, from_customer_id=?, to_customer_id=?, from_bank_id=?, to_bank_id=?, booking_id=?, account_id=?, amount=?, narration=?, voucher_id=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?",
+                [$transfer_no, $date, $type, $project_id, $fromCust, $toCust, $fromBank, $toBank, $bookingId, $fromAcc ?? null, $amount, $narr, $voucherId, $edit_id]);
+            flash('success', 'Transfer ' . $transfer_no . ' updated.');
+        } else {
+            db_exec("INSERT INTO transfers (transfer_no, transfer_date, transfer_type, project_id, from_customer_id, to_customer_id, from_bank_id, to_bank_id, booking_id, account_id, amount, narration, voucher_id, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                [$transfer_no, $date, $type, $project_id, $fromCust, $toCust, $fromBank, $toBank, $bookingId, $fromAcc ?? null, $amount, $narr, $voucherId, $user['id']]);
+            flash('success', 'Transfer ' . $transfer_no . ' saved.');
+        }
         redirect('transfers.php');
     }
 }
 
 $customers = db_all("SELECT * FROM customers WHERE status = 1 ORDER BY full_name");
 $banks = db_all("SELECT * FROM banks ORDER BY name");
+$projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
 include '../includes/header.php';
 ?>
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
     <a href="transfers.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
-    <h5 class="mb-0">New Transfer / Withdraw</h5>
+    <h5 class="mb-0"><?= $edit_id > 0 ? 'Edit Transfer' : 'New Transfer / Withdraw' ?></h5>
 </div>
 
 <form method="post">
@@ -210,20 +247,28 @@ include '../includes/header.php';
                 <div class="col-md-4">
                     <label class="form-label">Transfer Type</label>
                     <select name="transfer_type" id="selType" class="form-select" required>
-                        <option value="customer_to_customer">Customer to Customer</option>
-                        <option value="bank_to_cash">Bank to Cash (Withdraw)</option>
-                        <option value="bank_to_bank">Bank to Bank</option>
-                        <option value="customer_withdraw">Customer Booking Withdraw</option>
-                        <option value="owner_withdraw">Owner / Partner Withdraw</option>
+                        <option value="customer_to_customer" <?= ($record['transfer_type'] ?? '') === 'customer_to_customer' ? 'selected' : '' ?>>Customer to Customer</option>
+                        <option value="bank_to_cash" <?= ($record['transfer_type'] ?? '') === 'bank_to_cash' ? 'selected' : '' ?>>Bank to Cash (Withdraw)</option>
+                        <option value="bank_to_bank" <?= ($record['transfer_type'] ?? '') === 'bank_to_bank' ? 'selected' : '' ?>>Bank to Bank</option>
+                        <option value="customer_withdraw" <?= ($record['transfer_type'] ?? '') === 'customer_withdraw' ? 'selected' : '' ?>>Customer Booking Withdraw</option>
+                        <option value="owner_withdraw" <?= ($record['transfer_type'] ?? '') === 'owner_withdraw' ? 'selected' : '' ?>>Owner / Partner Withdraw</option>
                     </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Transfer No</label>
-                    <input type="text" name="transfer_no" class="form-control" placeholder="Auto if blank">
+                    <input type="text" name="transfer_no" class="form-control" placeholder="Auto if blank" value="<?= e($record['transfer_no'] ?? '') ?>">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Date</label>
-                    <input type="date" name="transfer_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    <input type="date" name="transfer_date" class="form-control" value="<?= e($record['transfer_date'] ?? date('Y-m-d')) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Project</label>
+                    <select name="project_id" class="form-select" disabled>
+                        <option value="">-- General / No Project --</option>
+                        <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= (int)$project_id === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
+                    </select>
+                    <div class="form-text">Locked to the active project selected in the header.</div>
                 </div>
             </div>
         </div>
@@ -238,7 +283,7 @@ include '../includes/header.php';
                     <label class="form-label">From Customer</label>
                     <select name="from_customer_id" class="form-select">
                         <option value="">Select Customer</option>
-                        <?php foreach ($customers as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['full_name']) ?> (<?= e($c['customer_no']) ?>)</option><?php endforeach; ?>
+                        <?php foreach ($customers as $c): ?><option value="<?= $c['id'] ?>" <?= (int)($record['from_customer_id'] ?? 0) === (int)$c['id'] ? 'selected' : '' ?>><?= e($c['full_name']) ?> (<?= e($c['customer_no']) ?>)</option><?php endforeach; ?>
                     </select>
                     <div class="form-text">Is customer ke ledger me credit hoga (outstanding kam).</div>
                 </div>
@@ -246,13 +291,13 @@ include '../includes/header.php';
                     <label class="form-label">To Customer</label>
                     <select name="to_customer_id" class="form-select">
                         <option value="">Select Customer</option>
-                        <?php foreach ($customers as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['full_name']) ?> (<?= e($c['customer_no']) ?>)</option><?php endforeach; ?>
+                        <?php foreach ($customers as $c): ?><option value="<?= $c['id'] ?>" <?= (int)($record['to_customer_id'] ?? 0) === (int)$c['id'] ? 'selected' : '' ?>><?= e($c['full_name']) ?> (<?= e($c['customer_no']) ?>)</option><?php endforeach; ?>
                     </select>
                     <div class="form-text">Is customer ke ledger me debit hoga (outstanding zyada).</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Amount</label>
-                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money>
+                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money value="<?= e($record['amount'] ?? '') ?>">
                 </div>
             </div>
 
@@ -261,12 +306,12 @@ include '../includes/header.php';
                     <label class="form-label">From Bank</label>
                     <select name="from_bank_id" class="form-select">
                         <option value="">Select Bank</option>
-                        <?php foreach ($banks as $b): ?><option value="<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
+                        <?php foreach ($banks as $b): ?><option value="<?= $b['id'] ?>" <?= (int)($record['from_bank_id'] ?? 0) === (int)$b['id'] ? 'selected' : '' ?>><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Amount</label>
-                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money>
+                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money value="<?= e($record['amount'] ?? '') ?>">
                 </div>
             </div>
 
@@ -275,19 +320,19 @@ include '../includes/header.php';
                     <label class="form-label">From Bank</label>
                     <select name="from_bank_id" class="form-select">
                         <option value="">Select Bank</option>
-                        <?php foreach ($banks as $b): ?><option value="<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
+                        <?php foreach ($banks as $b): ?><option value="<?= $b['id'] ?>" <?= (int)($record['from_bank_id'] ?? 0) === (int)$b['id'] ? 'selected' : '' ?>><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">To Bank</label>
                     <select name="to_bank_id" class="form-select">
                         <option value="">Select Bank</option>
-                        <?php foreach ($banks as $b): ?><option value="<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
+                        <?php foreach ($banks as $b): ?><option value="<?= $b['id'] ?>" <?= (int)($record['to_bank_id'] ?? 0) === (int)$b['id'] ? 'selected' : '' ?>><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Amount</label>
-                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money>
+                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money value="<?= e($record['amount'] ?? '') ?>">
                 </div>
             </div>
 
@@ -316,27 +361,27 @@ include '../includes/header.php';
                 <div class="col-md-6">
                     <label class="form-label">Withdraw From</label>
                     <select name="withdraw_from" class="form-select">
-                        <option value="cash">Cash</option>
-                        <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
+                        <option value="cash" <?= $wFrom === 'cash' ? 'selected' : '' ?>>Cash</option>
+                        <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>" <?= $wFrom === ('bank:' . $b['id']) ? 'selected' : '' ?>><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Amount</label>
-                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money>
+                    <input type="number" step="0.01" name="amount" class="form-control" data-mask-money value="<?= e($record['amount'] ?? '') ?>">
                 </div>
             </div>
 
             <div class="row g-3 mt-0">
                 <div class="col-md-8">
                     <label class="form-label">Narration</label>
-                    <input type="text" name="narration" class="form-control" placeholder="Optional">
+                    <input type="text" name="narration" class="form-control" placeholder="Optional" value="<?= e($record['narration'] ?? '') ?>">
                 </div>
             </div>
         </div>
     </div>
 
     <div class="mt-3 d-flex gap-2">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save Transfer</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i><?= $edit_id > 0 ? 'Update Transfer' : 'Save Transfer' ?></button>
         <a href="transfers.php" class="btn btn-light">Cancel</a>
     </div>
 </form>

@@ -99,6 +99,7 @@ include '../includes/header.php';
                         <td><span class="badge bg-light text-dark border"><?= $r['prop_count'] ?></span></td>
                         <td><?= $r['status'] ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' ?></td>
                         <td class="text-end">
+                            <a class="btn btn-sm btn-primary" href="project_dashboard.php?id=<?= $r['id'] ?>" title="Dashboard"><i class="bi bi-speedometer2"></i></a>
                             <a class="btn btn-sm btn-outline-info" href="project_view.php?id=<?= $r['id'] ?>" title="Manage"><i class="bi bi-diagram-2"></i></a>
                             <?php if ($canEdit): ?>
                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#recordModal" data-edit='<?= h(json_encode(['id' => $r['id'], 'name' => $r['name'], 'developer' => $r['developer'], 'location' => $r['location'], 'country_id' => $r['country_id'], 'city_id' => $r['city_id'], 'area_id' => $r['area_id'], 'society_id' => $r['society_id'], 'noc' => $r['noc'], 'description' => $r['description'], 'status' => $r['status']])) ?>'><i class="bi bi-pencil"></i></button>

@@ -7,6 +7,7 @@ $active = 'reports';
 
 $from = $_GET['from'] ?? date('Y-m-01');
 $to = $_GET['to'] ?? date('Y-m-d');
+$project_id = (int)($_GET['project_id'] ?? active_project_id());
 
 $receipts = db_all("SELECT r.*, c.full_name AS customer_name, c.customer_no, b.booking_no, p.property_no, pm.name AS method_name, bk.name AS bank_name
                     FROM receipts r
@@ -16,7 +17,8 @@ $receipts = db_all("SELECT r.*, c.full_name AS customer_name, c.customer_no, b.b
                     LEFT JOIN payment_methods pm ON pm.id = r.payment_method_id
                     LEFT JOIN banks bk ON bk.id = r.bank_id
                     WHERE r.receipt_date BETWEEN ? AND ?
-                    ORDER BY r.receipt_date DESC", [$from, $to]);
+                    AND (? = 0 OR r.project_id = ?)
+                    ORDER BY r.receipt_date DESC", [$from, $to, $project_id, $project_id]);
 
 $rentCols = db_all("SELECT rc.*, ra.agreement_no, p.property_no, t.full_name AS tenant_name, pm.name AS method_name
                     FROM rent_collections rc
@@ -25,7 +27,8 @@ $rentCols = db_all("SELECT rc.*, ra.agreement_no, p.property_no, t.full_name AS 
                     JOIN tenants t ON t.id = ra.tenant_id
                     LEFT JOIN payment_methods pm ON pm.id = rc.payment_method_id
                     WHERE rc.collection_date BETWEEN ? AND ?
-                    ORDER BY rc.collection_date DESC", [$from, $to]);
+                    AND (? = 0 OR p.project_id = ?)
+                    ORDER BY rc.collection_date DESC", [$from, $to, $project_id, $project_id]);
 
 $totalSale = 0.0; $byMethod = [];
 foreach ($receipts as $r) {
@@ -35,14 +38,21 @@ foreach ($receipts as $r) {
 }
 $totalRent = 0.0;
 foreach ($rentCols as $r) $totalRent += (float)$r['amount'];
+$projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
 include '../../includes/header.php';
 ?>
 
 <form method="get" class="card mb-3">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
-            <div class="col-md-3"><input type="date" name="from" class="form-control" value="<?= e($from) ?>"></div>
-            <div class="col-md-3"><input type="date" name="to" class="form-control" value="<?= e($to) ?>"></div>
+            <div class="col-md-2"><input type="date" name="from" class="form-control" value="<?= e($from) ?>"></div>
+            <div class="col-md-2"><input type="date" name="to" class="form-control" value="<?= e($to) ?>"></div>
+            <div class="col-md-3">
+                <select name="project_id" class="form-select">
+                    <option value="">All Projects</option>
+                    <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= $project_id === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-md-2"><button class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>View</button></div>
         </div>
     </div>

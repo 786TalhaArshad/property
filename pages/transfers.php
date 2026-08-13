@@ -96,6 +96,7 @@ include '../includes/header.php';
                         <?php if ($canEdit): ?>
                         <td class="text-end">
                             <?php if ($r['transfer_type'] !== 'customer_withdraw'): ?>
+                            <a class="btn btn-sm btn-outline-primary" href="transfer_form.php?id=<?= $r['id'] ?>" title="Edit"><i class="bi bi-pencil"></i></a>
                             <form method="post" class="d-inline" data-confirm="Delete this transfer?<?= $r['voucher_id'] ? ' The linked journal voucher will also be removed.' : '' ?>">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete">

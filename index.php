@@ -56,6 +56,18 @@ $bankBalance = acct_balance('1001');
 $income = (float)db_get("SELECT COALESCE(SUM(vi.credit - vi.debit),0) amt FROM voucher_items vi JOIN chart_of_accounts c ON c.id = vi.account_id WHERE c.account_type = 'income'")['amt'];
 $expense = (float)db_get("SELECT COALESCE(SUM(vi.debit - vi.credit),0) amt FROM voucher_items vi JOIN chart_of_accounts c ON c.id = vi.account_id WHERE c.account_type = 'expense'")['amt'];
 
+$projectSummaries = db_all("SELECT p.id, p.name, p.developer, p.status,
+    (SELECT COUNT(*) FROM properties pr WHERE pr.project_id = p.id) AS properties,
+    (SELECT COUNT(*) FROM properties pr WHERE pr.project_id = p.id AND pr.status = 'available') AS available,
+    (SELECT COUNT(*) FROM properties pr WHERE pr.project_id = p.id AND pr.status = 'booked') AS booked,
+    (SELECT COUNT(*) FROM properties pr WHERE pr.project_id = p.id AND pr.status = 'sold') AS sold,
+    (SELECT COUNT(DISTINCT b.customer_id) FROM bookings b JOIN properties pr ON pr.id = b.property_id WHERE pr.project_id = p.id) AS customers,
+    (SELECT COUNT(*) FROM bookings b JOIN properties pr ON pr.id = b.property_id WHERE pr.project_id = p.id AND b.status <> 'cancelled') AS bookings,
+    (SELECT COALESCE(SUM(b.total_price - b.discount),0) FROM bookings b JOIN properties pr ON pr.id = b.property_id WHERE pr.project_id = p.id AND b.status <> 'cancelled') AS booking_value,
+    (SELECT COALESCE(SUM(r.amount),0) FROM receipts r JOIN bookings b ON b.id = r.booking_id JOIN properties pr ON pr.id = b.property_id WHERE pr.project_id = p.id) AS collected,
+    (SELECT COALESCE(SUM(i.amount - i.paid_amount),0) FROM installments i JOIN bookings b ON b.id = i.booking_id JOIN properties pr ON pr.id = b.property_id WHERE pr.project_id = p.id AND i.status IN ('pending','partial')) AS pending_amt
+    FROM projects p ORDER BY p.name");
+
 $months = [];
 $salesData = [];
 $rentData = [];
@@ -179,6 +191,51 @@ include __DIR__ . '/includes/header.php';
     <div class="col-xl-3 col-md-6"><div class="card stat-card bg-grad-blue"><div class="stat-body">
         <div class="stat-icon"><i class="bi bi-piggy-bank"></i></div>
         <div><div class="stat-label">PENDING AMOUNT</div><div class="stat-value"><?= e(setting('currency', 'Rs.')) ?> <?= fmt_money($pendingInstAmt) ?></div></div></div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex align-items-center">
+        <i class="bi bi-grid-1x2 me-2"></i> Projects Overview
+        <span class="ms-auto text-muted small">Har project ki apni dashboard</span>
+    </div>
+    <div class="card-body">
+        <?php if ($projectSummaries): ?>
+        <div class="row g-3">
+            <?php foreach ($projectSummaries as $pj): ?>
+            <?php $pOutstanding = (float)$pj['booking_value'] - (float)$pj['collected']; ?>
+            <div class="col-xl-4 col-md-6">
+                <div class="card h-100 border">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start mb-3">
+                            <i class="bi bi-building fs-5 me-2 text-primary"></i>
+                            <div class="min-w-0">
+                                <div class="fw-semibold text-truncate"><?= e($pj['name']) ?></div>
+                                <div class="small text-muted text-truncate"><?= e($pj['developer'] ?? '-') ?></div>
+                            </div>
+                            <?php if ($pj['status']): ?><span class="badge bg-success ms-auto">Active</span><?php else: ?><span class="badge bg-secondary ms-auto">Inactive</span><?php endif; ?>
+                        </div>
+                        <div class="row text-center small mb-3">
+                            <div class="col-3"><div class="fw-bold fs-6"><?= $pj['properties'] ?></div><div class="text-muted">Props</div></div>
+                            <div class="col-3"><div class="fw-bold fs-6 text-info"><?= $pj['booked'] ?></div><div class="text-muted">Booked</div></div>
+                            <div class="col-3"><div class="fw-bold fs-6 text-success"><?= $pj['sold'] ?></div><div class="text-muted">Sold</div></div>
+                            <div class="col-3"><div class="fw-bold fs-6"><?= $pj['customers'] ?></div><div class="text-muted">Cust</div></div>
+                        </div>
+                        <div class="small">
+                            <div class="d-flex justify-content-between py-1"><span class="text-muted">Booking Value</span><span class="fw-semibold"><?= fmt_money($pj['booking_value']) ?></span></div>
+                            <div class="d-flex justify-content-between py-1"><span class="text-muted">Collected</span><span class="fw-semibold text-success"><?= fmt_money($pj['collected']) ?></span></div>
+                            <div class="d-flex justify-content-between py-1"><span class="text-muted">Outstanding</span><span class="fw-semibold text-danger"><?= fmt_money($pOutstanding) ?></span></div>
+                            <div class="d-flex justify-content-between py-1"><span class="text-muted">Pending Inst.</span><span class="fw-semibold text-warning"><?= fmt_money($pj['pending_amt']) ?></span></div>
+                        </div>
+                        <a class="btn btn-sm btn-primary w-100 mt-3" href="<?= BASE_URL ?>/pages/project_dashboard.php?id=<?= $pj['id'] ?>"><i class="bi bi-speedometer2 me-1"></i>Open Dashboard</a>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php else: ?>
+            <div class="empty-state"><i class="bi bi-grid-1x2"></i><p>No projects yet</p></div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <div class="row g-3 mb-3">

@@ -72,7 +72,10 @@ if (is_post()) {
     redirect('rental_agreement_view.php?id=' . $id);
 }
 
-$properties = db_all("SELECT p.*, pr.name AS project_name FROM properties p LEFT JOIN projects pr ON pr.id = p.project_id WHERE p.status IN ('available','vacant') ORDER BY p.property_no");
+$ap = active_project_id();
+$properties = $ap
+    ? db_all("SELECT p.*, pr.name AS project_name FROM properties p LEFT JOIN projects pr ON pr.id = p.project_id WHERE p.status IN ('available','vacant') AND p.project_id = ? ORDER BY p.property_no", [$ap])
+    : db_all("SELECT p.*, pr.name AS project_name FROM properties p LEFT JOIN projects pr ON pr.id = p.project_id WHERE p.status IN ('available','vacant') ORDER BY p.property_no");
 $tenants = db_all("SELECT * FROM tenants WHERE status = 1 ORDER BY full_name");
 $owners = db_all("SELECT * FROM owners WHERE status = 1 ORDER BY full_name");
 $dealers = db_all("SELECT * FROM dealers WHERE status = 1 ORDER BY full_name");

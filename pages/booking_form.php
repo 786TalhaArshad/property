@@ -119,7 +119,10 @@ if (is_post()) {
 }
 
 $customers = db_all("SELECT * FROM customers WHERE status = 1 ORDER BY full_name");
-$properties = db_all("SELECT p.*, pt.name AS type_name, pr.name AS project_name FROM properties p LEFT JOIN property_types pt ON pt.id = p.property_type_id LEFT JOIN projects pr ON pr.id = p.project_id WHERE p.status IN ('available','reserved') ORDER BY p.property_no");
+$ap = active_project_id();
+$properties = $ap
+    ? db_all("SELECT p.*, pt.name AS type_name, pr.name AS project_name FROM properties p LEFT JOIN property_types pt ON pt.id = p.property_type_id LEFT JOIN projects pr ON pr.id = p.project_id WHERE p.status IN ('available','reserved') AND p.project_id = ? ORDER BY p.property_no", [$ap])
+    : db_all("SELECT p.*, pt.name AS type_name, pr.name AS project_name FROM properties p LEFT JOIN property_types pt ON pt.id = p.property_type_id LEFT JOIN projects pr ON pr.id = p.project_id WHERE p.status IN ('available','reserved') ORDER BY p.property_no");
 $dealers = db_all("SELECT * FROM dealers WHERE status = 1 ORDER BY full_name");
 $quotations = db_all("SELECT * FROM quotations WHERE status IN ('sent','accepted') ORDER BY quotation_no DESC");
 $paymentMethods = db_all("SELECT * FROM payment_methods ORDER BY name");

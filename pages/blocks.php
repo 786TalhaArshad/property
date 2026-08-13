@@ -12,9 +12,9 @@ if (is_post() && $canEdit) {
     if ($action === 'save') {
         $id = (int)($_POST['id'] ?? 0);
         $name = trim($_POST['name'] ?? '');
-        $project_id = (int)($_POST['project_id'] ?? 0);
+        $project_id = $id > 0 ? (int)(db_get("SELECT project_id FROM blocks WHERE id = ?", [$id])['project_id'] ?? 0) : active_project_id();
         if ($name === '' || !$project_id) {
-            flash('danger', 'Block name and project are required.');
+            flash('danger', 'Block name is required and an active project must be selected.');
         } elseif ($id > 0) {
             db_exec("UPDATE blocks SET name=?, project_id=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$name, $project_id, $id]);
             flash('success', 'Block updated successfully.');
@@ -29,7 +29,11 @@ if (is_post() && $canEdit) {
     redirect('blocks.php');
 }
 
-$records = db_all("SELECT b.*, p.name AS project_name FROM blocks b JOIN projects p ON p.id = b.project_id ORDER BY p.name, b.name");
+if (active_project_id()) {
+    $records = db_all("SELECT b.*, p.name AS project_name FROM blocks b JOIN projects p ON p.id = b.project_id WHERE b.project_id = ? ORDER BY b.name", [active_project_id()]);
+} else {
+    $records = db_all("SELECT b.*, p.name AS project_name FROM blocks b JOIN projects p ON p.id = b.project_id ORDER BY p.name, b.name");
+}
 $projects = db_all("SELECT * FROM projects ORDER BY name");
 include '../includes/header.php';
 ?>
@@ -89,10 +93,11 @@ include '../includes/header.php';
                     <input type="hidden" name="id" id="recordId">
                     <div class="mb-3">
                         <label class="form-label">Project</label>
-                        <select name="project_id" class="form-select" required>
+                        <select name="project_id" class="form-select" disabled>
                             <option value="">Select project</option>
-                            <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>"><?= e($p['name']) ?></option><?php endforeach; ?>
+                            <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= active_project_id() === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
                         </select>
+                        <div class="form-text">Project comes from the active project selected in the header.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Block Name</label>

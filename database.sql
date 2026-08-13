@@ -768,6 +768,7 @@ CREATE TABLE IF NOT EXISTS receipts (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   receipt_no VARCHAR(40) NOT NULL,
   receipt_date DATE NOT NULL,
+  project_id INT UNSIGNED DEFAULT NULL,
   customer_id INT UNSIGNED NOT NULL,
   booking_id INT UNSIGNED DEFAULT NULL,
   installment_id INT UNSIGNED DEFAULT NULL,
@@ -784,7 +785,9 @@ CREATE TABLE IF NOT EXISTS receipts (
   PRIMARY KEY (id),
   UNIQUE KEY uq_receipt_no (receipt_no),
   KEY idx_rec_customer (customer_id),
+  KEY idx_rec_project (project_id),
   CONSTRAINT fk_rec_customer FOREIGN KEY (customer_id) REFERENCES customers (id) ON DELETE CASCADE,
+  CONSTRAINT fk_rec_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL,
   CONSTRAINT fk_rec_booking FOREIGN KEY (booking_id) REFERENCES bookings (id) ON DELETE SET NULL,
   CONSTRAINT fk_rec_inst FOREIGN KEY (installment_id) REFERENCES installments (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
@@ -1054,6 +1057,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
   voucher_no VARCHAR(40) NOT NULL,
   voucher_date DATE NOT NULL,
   voucher_type ENUM('cash_payment','cash_receipt','bank_payment','bank_receipt','journal') NOT NULL,
+  project_id INT UNSIGNED DEFAULT NULL,
   narration VARCHAR(255) DEFAULT NULL,
   status ENUM('draft','posted') NOT NULL DEFAULT 'posted',
   created_by INT UNSIGNED DEFAULT NULL,
@@ -1062,7 +1066,9 @@ CREATE TABLE IF NOT EXISTS vouchers (
   updated_date DATE NOT NULL,
   updated_time TIME NOT NULL,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_voucher_no (voucher_no)
+  UNIQUE KEY uq_voucher_no (voucher_no),
+  KEY idx_voucher_project (project_id),
+  CONSTRAINT fk_voucher_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS voucher_items (
@@ -1088,6 +1094,7 @@ CREATE TABLE IF NOT EXISTS transfers (
   transfer_no VARCHAR(40) NOT NULL,
   transfer_date DATE NOT NULL,
   transfer_type ENUM('customer_to_customer','bank_to_cash','bank_to_bank','customer_withdraw','owner_withdraw') NOT NULL,
+  project_id INT UNSIGNED DEFAULT NULL,
   from_customer_id INT UNSIGNED DEFAULT NULL,
   to_customer_id INT UNSIGNED DEFAULT NULL,
   from_bank_id INT UNSIGNED DEFAULT NULL,
@@ -1106,6 +1113,7 @@ CREATE TABLE IF NOT EXISTS transfers (
   UNIQUE KEY uq_transfer_no (transfer_no),
   KEY idx_tr_date (transfer_date),
   KEY idx_tr_type (transfer_type),
+  KEY idx_tr_project (project_id),
   KEY idx_tr_from_customer (from_customer_id),
   KEY idx_tr_to_customer (to_customer_id),
   KEY idx_tr_booking (booking_id),
@@ -1115,7 +1123,8 @@ CREATE TABLE IF NOT EXISTS transfers (
   CONSTRAINT fk_tr_to_bank FOREIGN KEY (to_bank_id) REFERENCES banks (id) ON DELETE SET NULL,
   CONSTRAINT fk_tr_booking FOREIGN KEY (booking_id) REFERENCES bookings (id) ON DELETE SET NULL,
   CONSTRAINT fk_tr_account FOREIGN KEY (account_id) REFERENCES chart_of_accounts (id) ON DELETE SET NULL,
-  CONSTRAINT fk_tr_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL
+  CONSTRAINT fk_tr_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL,
+  CONSTRAINT fk_tr_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- ===================== CRM =====================
@@ -1429,3 +1438,9 @@ INSERT INTO chart_of_accounts (id, code, name, account_type, parent_id, opening_
 (11, '5300', 'Marketing Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (12, '5400', 'Transport Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (13, '5500', 'Miscellaneous Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
+
+INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES
+('4000-01', 'Commission Income', 'income', 6, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+('4000-02', 'Documentation Charges', 'income', 6, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+('4100-01', 'Plot / Property Rent', 'income', 7, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+('4100-02', 'Shop / Commercial Rent', 'income', 7, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());

@@ -3,6 +3,10 @@ if (!isset($title)) {
     $title = 'Dashboard';
 }
 $company = setting('company_name', APP_NAME);
+$activeProject = active_project();
+$activeProjectName = $activeProject ? $activeProject['name'] : 'All Projects';
+$headerProjects = db_all("SELECT id, name FROM projects WHERE status = 1 ORDER BY name");
+$backUrl = urlencode($_SERVER['REQUEST_URI'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -38,6 +42,18 @@ $company = setting('company_name', APP_NAME);
             </button>
             <h5 class="mb-0 fw-semibold d-none d-sm-block"><?= e($title) ?></h5>
             <div class="ms-auto d-flex align-items-center gap-3">
+                <div class="dropdown">
+                    <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Active Project">
+                        <i class="bi bi-folder2-open me-1"></i><?= e($activeProjectName) ?>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow:auto">
+                        <li><a class="dropdown-item <?= !active_project_id() ? 'active' : '' ?>" href="<?= BASE_URL ?>/pages/switch_project.php?id=0&back=<?= $backUrl ?>">All Projects</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <?php foreach ($headerProjects as $hp): ?>
+                        <li><a class="dropdown-item <?= active_project_id() === (int)$hp['id'] ? 'active' : '' ?>" href="<?= BASE_URL ?>/pages/switch_project.php?id=<?= (int)$hp['id'] ?>&back=<?= $backUrl ?>"><i class="bi bi-grid me-2"></i><?= e($hp['name']) ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
                 <a href="<?= BASE_URL ?>/pages/notifications.php" class="btn btn-light btn-sm position-relative" title="Notifications">
                     <i class="bi bi-bell"></i>
                 </a>

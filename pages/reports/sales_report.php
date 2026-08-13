@@ -7,7 +7,7 @@ $active = 'reports';
 
 $from = $_GET['from'] ?? date('Y-01-01');
 $to = $_GET['to'] ?? date('Y-m-d');
-$project_id = (int)($_GET['project_id'] ?? 0);
+$project_id = (int)($_GET['project_id'] ?? active_project_id());
 
 $where = "b.booking_date BETWEEN ? AND ?";
 $params = [$from, $to];

@@ -6,6 +6,7 @@ $title = 'Outstanding Report';
 $active = 'reports';
 
 $asOf = $_GET['as_of'] ?? date('Y-m-d');
+$project_id = (int)($_GET['project_id'] ?? active_project_id());
 
 $inst = db_all("SELECT i.*, b.booking_no, c.full_name AS customer_name, c.phone, p.property_no
                 FROM installments i
@@ -13,7 +14,8 @@ $inst = db_all("SELECT i.*, b.booking_no, c.full_name AS customer_name, c.phone,
                 JOIN customers c ON c.id = b.customer_id
                 JOIN properties p ON p.id = b.property_id
                 WHERE b.status <> 'cancelled' AND i.status IN ('pending','partial','overdue')
-                ORDER BY i.due_date", []);
+                AND (? = 0 OR p.project_id = ?)
+                ORDER BY i.due_date", [$project_id, $project_id]);
 
 $instOut = 0.0; $instTotal = 0; $overdue = 0;
 $instByBooking = [];
@@ -36,7 +38,8 @@ $rent = db_all("SELECT rs.*, ra.agreement_no, p.property_no, t.full_name AS tena
                 JOIN properties p ON p.id = ra.property_id
                 JOIN tenants t ON t.id = ra.tenant_id
                 WHERE ra.status IN ('active','renewed') AND rs.status IN ('pending','partial','overdue')
-                ORDER BY rs.due_date", []);
+                AND (? = 0 OR p.project_id = ?)
+                ORDER BY rs.due_date", [$project_id, $project_id]);
 
 $rentOut = 0.0; $rentRows = 0; $rentOverdue = 0;
 foreach ($rent as $r) {
@@ -46,13 +49,20 @@ foreach ($rent as $r) {
     $rentRows++;
     if ($r['due_date'] < $asOf) $rentOverdue++;
 }
+$projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
 include '../../includes/header.php';
 ?>
 
 <form method="get" class="card mb-3">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
-            <div class="col-md-3"><input type="date" name="as_of" class="form-control" value="<?= e($asOf) ?>"></div>
+            <div class="col-md-2"><input type="date" name="as_of" class="form-control" value="<?= e($asOf) ?>"></div>
+            <div class="col-md-3">
+                <select name="project_id" class="form-select">
+                    <option value="">All Projects</option>
+                    <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= $project_id === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-md-2"><button class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>View</button></div>
         </div>
     </div>

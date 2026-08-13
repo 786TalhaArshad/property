@@ -7,7 +7,7 @@ $active = 'properties';
 $canEdit = has_permission('properties.manage');
 
 $status = $_GET['status'] ?? '';
-$project_id = (int)($_GET['project_id'] ?? 0);
+$project_id = (int)($_GET['project_id'] ?? active_project_id());
 $type_id = (int)($_GET['type_id'] ?? 0);
 $search = trim($_GET['search'] ?? '');
 

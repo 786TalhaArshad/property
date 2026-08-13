@@ -21,7 +21,7 @@ if (is_post() && $canEdit) {
         $email = trim($_POST['email'] ?? '');
         $source = $_POST['source'] ?? 'other';
         $property_type_id = (int)($_POST['property_type_id'] ?? 0) ?: null;
-        $project_id = (int)($_POST['project_id'] ?? 0) ?: null;
+        $project_id = $id > 0 ? (int)(db_get("SELECT project_id FROM leads WHERE id = ?", [$id])['project_id'] ?? 0) : active_project_id();
         $budget = (float)($_POST['budget'] ?? 0);
         $status = $_POST['status'] ?? 'new';
         $assigned_to = (int)($_POST['assigned_to'] ?? 0) ?: null;
@@ -45,6 +45,7 @@ if (is_post() && $canEdit) {
 }
 
 $status = $_GET['status'] ?? '';
+$ap = active_project_id();
 $records = db_all("SELECT l.*, pt.name AS type_name, pr.name AS project_name, u.full_name AS assigned_name,
                    (SELECT COUNT(*) FROM lead_followups f WHERE f.lead_id = l.id) AS followup_count
                    FROM leads l
@@ -52,7 +53,8 @@ $records = db_all("SELECT l.*, pt.name AS type_name, pr.name AS project_name, u.
                    LEFT JOIN projects pr ON pr.id = l.project_id
                    LEFT JOIN users u ON u.id = l.assigned_to
                    WHERE (? = '' OR l.status = ?)
-                   ORDER BY l.id DESC", [$status, $status]);
+                   AND (? = 0 OR l.project_id = ?)
+                   ORDER BY l.id DESC", [$status, $status, $ap, $ap]);
 $users = db_all("SELECT * FROM users WHERE status = 1 ORDER BY full_name");
 $propertyTypes = db_all("SELECT * FROM property_types ORDER BY name");
 $projects = db_all("SELECT * FROM projects ORDER BY name");
@@ -166,10 +168,11 @@ include '../includes/header.php';
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Project</label>
-                            <select name="project_id" class="form-select">
+                            <select name="project_id" class="form-select" disabled>
                                 <option value="">Any</option>
-                                <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>"><?= e($p['name']) ?></option><?php endforeach; ?>
+                                <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= active_project_id() === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
                             </select>
+                            <div class="form-text">Uses the active project from the header.</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Budget</label>

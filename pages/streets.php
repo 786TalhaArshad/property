@@ -12,10 +12,10 @@ if (is_post() && $canEdit) {
     if ($action === 'save') {
         $id = (int)($_POST['id'] ?? 0);
         $name = trim($_POST['name'] ?? '');
-        $project_id = (int)($_POST['project_id'] ?? 0);
+        $project_id = $id > 0 ? (int)(db_get("SELECT project_id FROM streets WHERE id = ?", [$id])['project_id'] ?? 0) : active_project_id();
         $block_id = (int)($_POST['block_id'] ?? 0) ?: null;
         if ($name === '' || !$project_id) {
-            flash('danger', 'Street name and project are required.');
+            flash('danger', 'Street name is required and an active project must be selected.');
         } elseif ($id > 0) {
             db_exec("UPDATE streets SET name=?, project_id=?, block_id=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$name, $project_id, $block_id, $id]);
             flash('success', 'Street updated successfully.');
@@ -30,9 +30,13 @@ if (is_post() && $canEdit) {
     redirect('streets.php');
 }
 
-$records = db_all("SELECT s.*, p.name AS project_name, b.name AS block_name FROM streets s JOIN projects p ON p.id = s.project_id LEFT JOIN blocks b ON b.id = s.block_id ORDER BY p.name, s.name");
+if (active_project_id()) {
+    $records = db_all("SELECT s.*, p.name AS project_name, b.name AS block_name FROM streets s JOIN projects p ON p.id = s.project_id LEFT JOIN blocks b ON b.id = s.block_id WHERE s.project_id = ? ORDER BY s.name", [active_project_id()]);
+} else {
+    $records = db_all("SELECT s.*, p.name AS project_name, b.name AS block_name FROM streets s JOIN projects p ON p.id = s.project_id LEFT JOIN blocks b ON b.id = s.block_id ORDER BY p.name, s.name");
+}
 $projects = db_all("SELECT * FROM projects ORDER BY name");
-$blocks = db_all("SELECT * FROM blocks ORDER BY name");
+$blocks = active_project_id() ? db_all("SELECT * FROM blocks WHERE project_id = ? ORDER BY name", [active_project_id()]) : db_all("SELECT * FROM blocks ORDER BY name");
 include '../includes/header.php';
 ?>
 
@@ -92,10 +96,11 @@ include '../includes/header.php';
                     <input type="hidden" name="id" id="recordId">
                     <div class="mb-3">
                         <label class="form-label">Project</label>
-                        <select name="project_id" class="form-select" required>
+                        <select name="project_id" class="form-select" disabled>
                             <option value="">Select project</option>
-                            <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>"><?= e($p['name']) ?></option><?php endforeach; ?>
+                            <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= active_project_id() === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
                         </select>
+                        <div class="form-text">Project comes from the active project selected in the header.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Block</label>

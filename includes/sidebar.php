@@ -35,6 +35,15 @@
     </div>
     <?php endif; ?>
 
+    <?php if (has_permission('master.view')): ?>
+    <div class="nav-item <?= active_menu('societies') ?>">
+        <a class="nav-link" href="<?= BASE_URL ?>/pages/societies.php"><i class="bi bi-building"></i>Societies</a>
+    </div>
+    <div class="nav-item <?= active_menu('areas') ?>">
+        <a class="nav-link" href="<?= BASE_URL ?>/pages/areas.php"><i class="bi bi-geo-alt"></i>Areas</a>
+    </div>
+    <?php endif; ?>
+
     <?php if (has_permission('customers.view') || has_permission('owners.view') || has_permission('dealers.view') || has_permission('vendors.view') || has_permission('general_parties.view')): ?>
     <?php $parties = submenu_state(['customers', 'owners', 'dealers', 'vendors', 'general_parties']); ?>
     <div class="nav-item <?= $parties ?>">
@@ -161,22 +170,22 @@
     <?php endif; ?>
 
     <?php if (has_permission('master.view') || has_permission('settings.manage')): ?>
-    <?php $system = submenu_state(['master', 'settings', 'users', 'roles']); ?>
+    <?php $system = submenu_state(['master', 'areas', 'societies', 'settings', 'users', 'roles']); ?>
     <div class="nav-item <?= $system ?>">
         <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subSystem">
             <i class="bi bi-gear"></i>System <i class="bi bi-chevron-down chevron"></i>
         </a>
         <div class="collapse <?= $system ? 'show' : '' ?>" id="subSystem">
             <?php if (has_permission('master.view')): ?>
-            <div class="nav-item <?= active_menu('master') ?>">
+            <div class="nav-item <?= submenu_state(['master', 'areas', 'societies']) ?>">
                 <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subMaster">
                     <i class="bi bi-journal-text"></i>Master Data <i class="bi bi-chevron-down chevron"></i>
                 </a>
-                <div class="collapse <?= active_menu('master') ? 'show' : '' ?>" id="subMaster">
+                <div class="collapse <?= submenu_state(['master', 'areas', 'societies']) ? 'show' : '' ?>" id="subMaster">
                     <a class="nav-link" href="<?= BASE_URL ?>/pages/countries.php">Countries</a>
                     <a class="nav-link" href="<?= BASE_URL ?>/pages/cities.php">Cities</a>
-                    <a class="nav-link" href="<?= BASE_URL ?>/pages/areas.php">Areas</a>
-                    <a class="nav-link" href="<?= BASE_URL ?>/pages/societies.php">Societies</a>
+                    <a class="nav-link <?= active_menu('areas') ?>" href="<?= BASE_URL ?>/pages/areas.php">Areas</a>
+                    <a class="nav-link <?= active_menu('societies') ?>" href="<?= BASE_URL ?>/pages/societies.php">Societies</a>
                     <a class="nav-link" href="<?= BASE_URL ?>/pages/property_types.php">Property Types</a>
                     <a class="nav-link" href="<?= BASE_URL ?>/pages/property_categories.php">Property Categories</a>
                     <a class="nav-link" href="<?= BASE_URL ?>/pages/amenities.php">Amenities</a>

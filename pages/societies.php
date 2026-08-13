@@ -3,7 +3,7 @@ require_once '../includes/auth.php';
 require_login();
 require_permission('master.view');
 $title = 'Societies';
-$active = 'master';
+$active = 'societies';
 $canEdit = has_permission('settings.manage');
 
 if (is_post() && $canEdit) {

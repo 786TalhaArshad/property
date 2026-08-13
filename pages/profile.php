@@ -27,6 +27,10 @@ if (is_post()) {
 
 include '../includes/header.php';
 ?>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <a href="index.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+    <h5 class="mb-0">My Profile</h5>
+</div>
 <div class="row g-3">
     <div class="col-lg-4">
         <div class="card">

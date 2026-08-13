@@ -25,6 +25,10 @@ if (is_post()) {
 
 include '../includes/header.php';
 ?>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <a href="profile.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+    <h5 class="mb-0">Change Password</h5>
+</div>
 <div class="row justify-content-center">
     <div class="col-lg-6">
         <div class="card">

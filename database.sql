@@ -572,6 +572,60 @@ CREATE TABLE IF NOT EXISTS general_party_entries (
   CONSTRAINT fk_gpe_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- ===================== EMPLOYEES =====================
+
+CREATE TABLE IF NOT EXISTS employees (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  employee_no VARCHAR(40) NOT NULL,
+  full_name VARCHAR(180) NOT NULL,
+  father_name VARCHAR(180) DEFAULT NULL,
+  cnic VARCHAR(40) DEFAULT NULL,
+  phone VARCHAR(40) DEFAULT NULL,
+  whatsapp VARCHAR(40) DEFAULT NULL,
+  email VARCHAR(120) DEFAULT NULL,
+  address VARCHAR(255) DEFAULT NULL,
+  designation VARCHAR(120) DEFAULT NULL,
+  department VARCHAR(120) DEFAULT NULL,
+  joining_date DATE DEFAULT NULL,
+  monthly_salary DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  bank_id INT UNSIGNED DEFAULT NULL,
+  bank_account_title VARCHAR(150) DEFAULT NULL,
+  bank_account_no VARCHAR(80) DEFAULT NULL,
+  status TINYINT(1) NOT NULL DEFAULT 1,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_employees_no (employee_no),
+  KEY idx_employees_bank (bank_id),
+  CONSTRAINT fk_employees_bank FOREIGN KEY (bank_id) REFERENCES banks (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS employee_entries (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  employee_id INT UNSIGNED NOT NULL,
+  entry_no VARCHAR(40) NOT NULL,
+  entry_date DATE NOT NULL,
+  entry_type ENUM('payable','paid') NOT NULL,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  narration VARCHAR(255) DEFAULT NULL,
+  account_id INT UNSIGNED DEFAULT NULL,
+  voucher_id INT UNSIGNED DEFAULT NULL,
+  created_by INT UNSIGNED DEFAULT NULL,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_empe_no (entry_no),
+  KEY idx_empe_employee (employee_id),
+  KEY idx_empe_date (entry_date),
+  KEY idx_empe_type (entry_type),
+  CONSTRAINT fk_empe_employee FOREIGN KEY (employee_id) REFERENCES employees (id) ON DELETE CASCADE,
+  CONSTRAINT fk_empe_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- ===================== PROPERTIES =====================
 
 CREATE TABLE IF NOT EXISTS properties (
@@ -1315,7 +1369,9 @@ INSERT INTO permissions (id, module, slug, name, created_date, created_time, upd
 (31, 'Vendors',     'vendors.view',        'View Vendors',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (32, 'Vendors',     'vendors.manage',      'Manage Vendors',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (33, 'General Parties','general_parties.view',  'View General Parties',  CURDATE(), CURTIME(), CURDATE(), CURTIME()),
-(34, 'General Parties','general_parties.manage','Manage General Parties', CURDATE(), CURTIME(), CURDATE(), CURTIME());
+(34, 'General Parties','general_parties.manage','Manage General Parties', CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(35, 'Employees',     'employees.view',         'View Employees',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(36, 'Employees',     'employees.manage',       'Manage Employees',      CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 INSERT INTO role_permissions (role_id, permission_id, created_date, created_time, updated_date, updated_time)
 SELECT 1, id, CURDATE(), CURTIME(), CURDATE(), CURTIME() FROM permissions;
@@ -1437,7 +1493,8 @@ INSERT INTO chart_of_accounts (id, code, name, account_type, parent_id, opening_
 (10, '5200', 'Utilities Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (11, '5300', 'Marketing Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (12, '5400', 'Transport Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
-(13, '5500', 'Miscellaneous Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
+(13, '5500', 'Miscellaneous Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(14, '2050', 'Employee Payable', 'liability', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES
 ('4000-01', 'Commission Income', 'income', 6, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),

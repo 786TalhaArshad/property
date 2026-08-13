@@ -110,7 +110,7 @@
     <?php endif; ?>
 
     <?php if (has_permission('accounting.view')): ?>
-    <?php $finance = submenu_state(['chart_of_accounts', 'expense_heads', 'income_heads', 'vouchers', 'transfers', 'roznamcha', 'ledger', 'trial_balance', 'profit_loss', 'balance_sheet']); ?>
+    <?php $finance = submenu_state(['chart_of_accounts', 'expense_heads', 'income_heads', 'vouchers', 'transfers', 'employees', 'roznamcha', 'ledger', 'trial_balance', 'profit_loss', 'balance_sheet']); ?>
     <div class="nav-item <?= $finance ?>">
         <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subFinance">
             <i class="bi bi-wallet2"></i>Finance <i class="bi bi-chevron-down chevron"></i>
@@ -121,6 +121,9 @@
             <a class="nav-link <?= active_menu('income_heads') ?>" href="<?= BASE_URL ?>/pages/income_heads.php">Income Heads</a>
             <a class="nav-link <?= active_menu('vouchers') ?>" href="<?= BASE_URL ?>/pages/vouchers.php">Vouchers</a>
             <a class="nav-link <?= active_menu('transfers') ?>" href="<?= BASE_URL ?>/pages/transfers.php">Transfers / Withdrawals</a>
+            <?php if (has_permission('employees.view')): ?>
+            <a class="nav-link <?= active_menu('employees') ?>" href="<?= BASE_URL ?>/pages/employees.php">Employees</a>
+            <?php endif; ?>
             <a class="nav-link <?= active_menu('roznamcha') ?>" href="<?= BASE_URL ?>/pages/roznamcha.php">Roznamcha (Day Book)</a>
             <a class="nav-link <?= active_menu('ledger') ?>" href="<?= BASE_URL ?>/pages/ledger.php">General Ledger</a>
             <a class="nav-link <?= active_menu('trial_balance') ?>" href="<?= BASE_URL ?>/pages/trial_balance.php">Trial Balance</a>

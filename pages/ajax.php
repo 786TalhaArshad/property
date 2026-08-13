@@ -28,5 +28,38 @@ if ($action === 'blocks') {
                     FROM bookings b WHERE b.id = ?", [$id]);
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+    if (!has_permission('settings.manage')) {
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => false, 'error' => 'Permission denied.']);
+        exit;
+    }
+    $action = $_POST['action'] ?? '';
+    $name = trim($_POST['name'] ?? '');
+    $city_id = (int)($_POST['city_id'] ?? 0);
+    if ($action === 'add_society' || $action === 'add_area') {
+        $table = $action === 'add_society' ? 'societies' : 'areas';
+        if ($name === '' || !$city_id) {
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Name and city are required.']);
+            exit;
+        }
+        $existing = db_get("SELECT id FROM $table WHERE name = ? AND city_id = ?", [$name, $city_id]);
+        if ($existing) {
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => true, 'id' => (int)$existing['id'], 'name' => $name]);
+            exit;
+        }
+        $id = db_exec("INSERT INTO $table (name, city_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$name, $city_id]);
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true, 'id' => (int)$id, 'name' => $name]);
+        exit;
+    }
+    header('Content-Type: application/json');
+    echo json_encode(['ok' => false, 'error' => 'Invalid action.']);
+    exit;
+}
+
 header('Content-Type: application/json');
 echo json_encode($rows);

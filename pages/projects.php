@@ -5,6 +5,7 @@ require_permission('projects.view');
 $title = 'Projects';
 $active = 'projects';
 $canEdit = has_permission('projects.manage');
+$quickAdd = $canEdit && has_permission('settings.manage');
 
 if (is_post() && $canEdit) {
     csrf_check();
@@ -165,17 +166,27 @@ include '../includes/header.php';
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Society</label>
-                            <select name="society_id" class="form-select">
-                                <option value="">Select</option>
-                                <?php foreach ($societies as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
-                            </select>
+                            <div class="input-group">
+                                <select name="society_id" class="form-select">
+                                    <option value="">Select</option>
+                                    <?php foreach ($societies as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
+                                </select>
+                                <?php if ($quickAdd): ?>
+                                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickModal" data-quick="society" title="Add Society"><i class="bi bi-plus-lg"></i></button>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Area</label>
-                            <select name="area_id" class="form-select">
-                                <option value="">Select</option>
-                                <?php foreach ($areas as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
-                            </select>
+                            <div class="input-group">
+                                <select name="area_id" class="form-select">
+                                    <option value="">Select</option>
+                                    <?php foreach ($areas as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
+                                </select>
+                                <?php if ($quickAdd): ?>
+                                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickModal" data-quick="area" title="Add Area"><i class="bi bi-plus-lg"></i></button>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">NOC File</label>
@@ -210,6 +221,86 @@ include '../includes/header.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
+
+<?php if ($quickAdd): ?>
+<div class="modal fade" id="quickModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="quickForm">
+                <div class="modal-header"><h5 class="modal-title" id="quickTitle">Add</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <?= csrf_field() ?>
+                    <input type="hidden" id="quickType">
+                    <div class="mb-3">
+                        <label class="form-label">City</label>
+                        <select id="quickCity" class="form-select" required>
+                            <option value="">Select city</option>
+                            <?php foreach ($cities as $c): ?>
+                                <option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" id="quickNameLabel">Name</label>
+                        <input type="text" id="quickName" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var modal = document.getElementById('quickModal');
+    if (!modal) return;
+
+    modal.addEventListener('show.bs.modal', function (e) {
+        var btn = e.relatedTarget;
+        var type = btn ? btn.getAttribute('data-quick') : '';
+        if (type !== 'society' && type !== 'area') return;
+        modal.querySelector('#quickType').value = type;
+        modal.querySelector('#quickTitle').textContent = 'Add ' + (type === 'society' ? 'Society' : 'Area');
+        modal.querySelector('#quickNameLabel').textContent = (type === 'society' ? 'Society' : 'Area') + ' Name';
+        var citySel = document.querySelector('#recordModal select[name="city_id"]');
+        modal.querySelector('#quickCity').value = citySel ? citySel.value : '';
+    });
+
+    document.getElementById('quickForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var form = this;
+        var type = modal.querySelector('#quickType').value;
+        var city = modal.querySelector('#quickCity').value;
+        var name = modal.querySelector('#quickName').value.trim();
+        if (!city || !name) {
+            alert('Select a city and enter a name.');
+            return;
+        }
+        var data = new URLSearchParams();
+        data.set('action', type === 'society' ? 'add_society' : 'add_area');
+        data.set('city_id', city);
+        data.set('name', name);
+        data.set('csrf_token', modal.querySelector('#quickForm input[name="csrf_token"]').value);
+        fetch('ajax.php', { method: 'POST', body: data, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.ok) { alert(res.error || 'Failed to save.'); return; }
+                var selName = type === 'society' ? 'select[name="society_id"]' : 'select[name="area_id"]';
+                var $sel = $('#recordModal').find(selName);
+                if (!$sel.find('option[value="' + res.id + '"]').length) {
+                    $sel.append($('<option>', { value: res.id, text: res.name }));
+                }
+                $sel.val(String(res.id));
+                $('#quickModal').modal('hide');
+                form.reset();
+            });
+    });
+})();
+</script>
 <?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>

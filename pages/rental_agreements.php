@@ -64,6 +64,7 @@ include '../includes/header.php';
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-info" href="rental_agreement_view.php?id=<?= $r['id'] ?>"><i class="bi bi-eye"></i></a>
                             <?php if ($canEdit): ?>
+                            <a class="btn btn-sm btn-outline-primary" href="rental_agreement_form.php?id=<?= $r['id'] ?>"><i class="bi bi-pencil"></i></a>
                             <form method="post" class="d-inline" data-confirm="Delete this rental agreement? Schedule and collections will be removed.">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete">

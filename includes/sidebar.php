@@ -44,8 +44,8 @@
     </div>
     <?php endif; ?>
 
-    <?php if (has_permission('customers.view') || has_permission('owners.view') || has_permission('dealers.view') || has_permission('vendors.view') || has_permission('general_parties.view')): ?>
-    <?php $parties = submenu_state(['customers', 'owners', 'dealers', 'vendors', 'general_parties']); ?>
+    <?php if (has_permission('customers.view') || has_permission('owners.view') || has_permission('dealers.view') || has_permission('vendors.view') || has_permission('general_parties.view') || has_permission('contractors.view')): ?>
+    <?php $parties = submenu_state(['customers', 'owners', 'dealers', 'vendors', 'general_parties', 'contractors']); ?>
     <div class="nav-item <?= $parties ?>">
         <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subParties">
             <i class="bi bi-people"></i>Parties <i class="bi bi-chevron-down chevron"></i>
@@ -62,6 +62,9 @@
             <?php endif; ?>
             <?php if (has_permission('vendors.view')): ?>
             <a class="nav-link <?= active_menu('vendors') ?>" href="<?= BASE_URL ?>/pages/vendors.php">Vendors</a>
+            <?php endif; ?>
+            <?php if (has_permission('contractors.view')): ?>
+            <a class="nav-link <?= active_menu('contractors') ?>" href="<?= BASE_URL ?>/pages/contractors.php">Contractors</a>
             <?php endif; ?>
             <?php if (has_permission('general_parties.view')): ?>
             <a class="nav-link <?= active_menu('general_parties') ?>" href="<?= BASE_URL ?>/pages/general_parties.php">General Party</a>
@@ -119,7 +122,7 @@
     <?php endif; ?>
 
     <?php if (has_permission('accounting.view')): ?>
-    <?php $finance = submenu_state(['chart_of_accounts', 'expense_heads', 'income_heads', 'vouchers', 'transfers', 'employees', 'roznamcha', 'ledger', 'trial_balance', 'profit_loss', 'balance_sheet']); ?>
+    <?php $finance = submenu_state(['chart_of_accounts', 'expense_heads', 'income_heads', 'cash_received', 'cash_paid', 'cashbook', 'vouchers', 'transfers', 'employees', 'roznamcha', 'ledger', 'trial_balance', 'profit_loss', 'balance_sheet']); ?>
     <div class="nav-item <?= $finance ?>">
         <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subFinance">
             <i class="bi bi-wallet2"></i>Finance <i class="bi bi-chevron-down chevron"></i>
@@ -128,7 +131,10 @@
             <a class="nav-link <?= active_menu('chart_of_accounts') ?>" href="<?= BASE_URL ?>/pages/chart_of_accounts.php">Chart of Accounts</a>
             <a class="nav-link <?= active_menu('expense_heads') ?>" href="<?= BASE_URL ?>/pages/expense_heads.php">Expense Heads</a>
             <a class="nav-link <?= active_menu('income_heads') ?>" href="<?= BASE_URL ?>/pages/income_heads.php">Income Heads</a>
-            <a class="nav-link <?= active_menu('vouchers') ?>" href="<?= BASE_URL ?>/pages/vouchers.php">Vouchers</a>
+            <a class="nav-link <?= active_menu('vouchers') ?>" href="<?= BASE_URL ?>/pages/vouchers.php">Vouchers / Journal</a>
+<a class="nav-link <?= active_menu('cash_received') ?>" href="<?= BASE_URL ?>/pages/cash_received.php">Cash Received</a>
+<a class="nav-link <?= active_menu('cash_paid') ?>" href="<?= BASE_URL ?>/pages/cash_paid.php">Cash Paid</a>
+<a class="nav-link <?= active_menu('cashbook') ?>" href="<?= BASE_URL ?>/pages/cashbook.php">Cash Book</a>
             <a class="nav-link <?= active_menu('transfers') ?>" href="<?= BASE_URL ?>/pages/transfers.php">Transfers / Withdrawals</a>
             <?php if (has_permission('employees.view')): ?>
             <a class="nav-link <?= active_menu('employees') ?>" href="<?= BASE_URL ?>/pages/employees.php">Employees</a>
@@ -138,6 +144,46 @@
             <a class="nav-link <?= active_menu('trial_balance') ?>" href="<?= BASE_URL ?>/pages/trial_balance.php">Trial Balance</a>
             <a class="nav-link <?= active_menu('profit_loss') ?>" href="<?= BASE_URL ?>/pages/profit_loss.php">Profit &amp; Loss</a>
             <a class="nav-link <?= active_menu('balance_sheet') ?>" href="<?= BASE_URL ?>/pages/balance_sheet.php">Balance Sheet</a>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if (has_permission('accounting.view') || has_permission('customers.view') || has_permission('vendors.view') || has_permission('dealers.view') || has_permission('owners.view') || has_permission('employees.view') || has_permission('general_parties.view') || has_permission('contractors.view') || has_permission('tenants.view')): ?>
+    <?php $ledgers = submenu_state(['ledger', 'expense_heads', 'income_heads', 'customers', 'vendors', 'dealers', 'owners', 'employees', 'general_parties', 'contractors', 'tenants']); ?>
+    <div class="nav-item <?= $ledgers ?>">
+        <a class="nav-link" href="#" data-toggle="nav-parent" data-target="#subLedgers">
+            <i class="bi bi-journal-richtext"></i>Ledgers <i class="bi bi-chevron-down chevron"></i>
+        </a>
+        <div class="collapse <?= $ledgers ? 'show' : '' ?>" id="subLedgers">
+            <?php if (has_permission('accounting.view')): ?>
+            <a class="nav-link <?= active_menu('ledger') ?>" href="<?= BASE_URL ?>/pages/ledger.php">General Ledger</a>
+            <a class="nav-link <?= active_menu('expense_heads') ?>" href="<?= BASE_URL ?>/pages/expense_heads.php">Expense Ledger</a>
+            <a class="nav-link <?= active_menu('income_heads') ?>" href="<?= BASE_URL ?>/pages/income_heads.php">Income Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('customers.view')): ?>
+            <a class="nav-link <?= active_menu('customers') ?>" href="<?= BASE_URL ?>/pages/customers.php">Customer Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('vendors.view')): ?>
+            <a class="nav-link <?= active_menu('vendors') ?>" href="<?= BASE_URL ?>/pages/vendors.php">Vendor Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('dealers.view')): ?>
+            <a class="nav-link <?= active_menu('dealers') ?>" href="<?= BASE_URL ?>/pages/dealers.php">Dealer Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('owners.view')): ?>
+            <a class="nav-link <?= active_menu('owners') ?>" href="<?= BASE_URL ?>/pages/owners.php">Owner Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('employees.view')): ?>
+            <a class="nav-link <?= active_menu('employees') ?>" href="<?= BASE_URL ?>/pages/employees.php">Employee Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('general_parties.view')): ?>
+            <a class="nav-link <?= active_menu('general_parties') ?>" href="<?= BASE_URL ?>/pages/general_parties.php">General Party Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('contractors.view')): ?>
+            <a class="nav-link <?= active_menu('contractors') ?>" href="<?= BASE_URL ?>/pages/contractors.php">Contractor Ledger</a>
+            <?php endif; ?>
+            <?php if (has_permission('tenants.view')): ?>
+            <a class="nav-link <?= active_menu('tenants') ?>" href="<?= BASE_URL ?>/pages/tenants.php">Tenant Ledger</a>
+            <?php endif; ?>
         </div>
     </div>
     <?php endif; ?>

@@ -73,7 +73,7 @@ include '../../includes/header.php';
                         <tbody>
                         <?php foreach ($monthly as $m): ?>
                             <?php $n = (float)$m['income'] - (float)$m['expense']; ?>
-                            <tr><td><?= date('M Y', strtotime($m['ym'] . '-01')) ?></td><td class="text-end text-success"><?= fmt_money($m['income']) ?></td><td class="text-end text-danger"><?= fmt_money($m['expense']) ?></td><td class="text-end fw-bold"><?= fmt_money($n) ?></td></tr>
+                            <tr><td><?= date('m/y', strtotime($m['ym'] . '-01')) ?></td><td class="text-end text-success"><?= fmt_money($m['income']) ?></td><td class="text-end text-danger"><?= fmt_money($m['expense']) ?></td><td class="text-end fw-bold"><?= fmt_money($n) ?></td></tr>
                         <?php endforeach; ?>
                         <?php if (!$monthly): ?><tr><td colspan="4"><div class="empty-state"><i class="bi bi-inbox"></i><p>No posted vouchers in this period</p></div></td></tr><?php endif; ?>
                         </tbody>

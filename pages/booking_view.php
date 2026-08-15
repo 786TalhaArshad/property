@@ -7,10 +7,11 @@ $active = 'bookings';
 $canEdit = has_permission('sales.manage');
 
 $id = (int)($_GET['id'] ?? 0);
-$booking = db_get("SELECT b.*, c.full_name AS customer_name, c.customer_no, c.cnic AS customer_cnic, c.phone AS customer_phone, p.property_no, p.plot_no AS property_address, p.size_value, p.size_unit, d.full_name AS dealer_name
+$booking = db_get("SELECT b.*, c.full_name AS customer_name, c.customer_no, c.cnic AS customer_cnic, c.phone AS customer_phone, p.property_no, p.plot_no AS property_address, p.size_value, p.size_unit, p.project_id, pr.name AS project_name, d.full_name AS dealer_name
                    FROM bookings b
                    JOIN customers c ON c.id = b.customer_id
                    JOIN properties p ON p.id = b.property_id
+                   LEFT JOIN projects pr ON pr.id = p.project_id
                    LEFT JOIN dealers d ON d.id = b.dealer_id
                    WHERE b.id = ?", [$id]);
 if (!$booking) {
@@ -52,6 +53,7 @@ if (is_post() && $canEdit) {
 
 $installments = db_all("SELECT * FROM installments WHERE booking_id = ? ORDER BY installment_no", [$id]);
 $receipts = db_all("SELECT r.*, pm.name AS method_name, b.name AS bank_name FROM receipts r LEFT JOIN payment_methods pm ON pm.id = r.payment_method_id LEFT JOIN banks b ON b.id = r.bank_id WHERE r.booking_id = ? ORDER BY r.receipt_date DESC", [$id]);
+$firstReceipt = $receipts[0] ?? null;
 $agreements = db_all("SELECT * FROM sale_agreements WHERE booking_id = ? ORDER BY agreement_date DESC", [$id]);
 $paymentMethods = db_all("SELECT * FROM payment_methods ORDER BY name");
 $banks = db_all("SELECT * FROM banks ORDER BY name");
@@ -78,12 +80,16 @@ include '../includes/header.php';
     <div class="col-md-3"><div class="card stat-card bg-grad-blue"><div class="stat-body"><div class="stat-icon"><i class="bi bi-bank"></i></div><div><div class="stat-label">TOTAL (AFTER DISCOUNT)</div><div class="stat-value"><?= fmt_money($grandTotal) ?></div></div></div></div></div>
     <div class="col-md-3"><div class="card stat-card bg-grad-green"><div class="stat-body"><div class="stat-icon"><i class="bi bi-cash-coin"></i></div><div><div class="stat-label">RECEIVED</div><div class="stat-value"><?= fmt_money($totalPaid) ?></div></div></div></div></div>
     <div class="col-md-3"><div class="card stat-card <?= ($grandTotal - $totalPaid) > 0 ? 'bg-grad-orange' : 'bg-grad-cyan' ?>"><div class="stat-body"><div class="stat-icon"><i class="bi bi-wallet2"></i></div><div><div class="stat-label">BALANCE</div><div class="stat-value"><?= fmt_money($grandTotal - $totalPaid) ?></div></div></div></div></div>
-    <div class="col-md-3"><div class="card stat-card bg-grad-purple"><div class="stat-body"><div class="stat-icon"><i class="bi bi-calendar2-check"></i></div><div><div class="stat-label">INSTALLMENTS</div><div class="stat-value"><?= count($installments) ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-purple"><div class="stat-body"><div class="stat-icon"><i class="bi bi-calendar2-check"></i></div><div><div class="stat-label"><?= $booking['sale_type'] === 'cash' ? 'PAYMENT' : 'INSTALLMENTS' ?></div><div class="stat-value"><?= $booking['sale_type'] === 'cash' ? e(($firstReceipt['bank_name'] ?? '') ?: 'Cash') : count($installments) ?></div></div></div></div></div>
 </div>
 
 <ul class="nav nav-pills mb-3">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bOverview">Overview</button></li>
+    <?php if ($booking['sale_type'] === 'cash'): ?>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bCash">Cash Payment</button></li>
+    <?php else: ?>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bInst">Installments (<?= count($installments) ?>)</button></li>
+    <?php endif; ?>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bReceipts">Receipts (<?= count($receipts) ?>)</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bAgreement">Sale Agreement</button></li>
 </ul>
@@ -97,12 +103,13 @@ include '../includes/header.php';
                     <div class="col-md-3"><div class="text-muted small">Customer No</div><div class="fw-medium"><?= e($booking['customer_no']) ?></div></div>
                     <div class="col-md-3"><div class="text-muted small">CNIC</div><div class="fw-medium"><?= e($booking['customer_cnic'] ?? '-') ?></div></div>
                     <div class="col-md-3"><div class="text-muted small">Phone</div><div class="fw-medium"><?= e($booking['customer_phone'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Project</div><div class="fw-medium"><?= $booking['project_name'] ? '<a href="project_view.php?id=' . (int)$booking['project_id'] . '">' . e($booking['project_name']) . '</a>' : '-' ?></div></div>
                     <div class="col-md-3"><div class="text-muted small">Property</div><div class="fw-medium"><a href="property_view.php?id=<?= $booking['property_id'] ?>"><?= e($booking['property_no']) ?></a></div></div>
                     <div class="col-md-3"><div class="text-muted small">Property Address</div><div class="fw-medium"><?= e($booking['property_address'] ?? '-') ?></div></div>
                     <div class="col-md-3"><div class="text-muted small">Size</div><div class="fw-medium"><?= fmt_num($booking['size_value']) ?> <?= e($booking['size_unit']) ?></div></div>
                     <div class="col-md-3"><div class="text-muted small">Dealer</div><div class="fw-medium"><?= e($booking['dealer_name'] ?? '-') ?></div></div>
                     <div class="col-md-3"><div class="text-muted small">Booking Date</div><div class="fw-medium"><?= fmt_date($booking['booking_date']) ?></div></div>
-                    <div class="col-md-3"><div class="text-muted small">Installment Plan</div><div class="fw-medium"><?= ucfirst(str_replace('_', ' ', e($booking['installment_plan']))) ?> / <?= (int)$booking['installment_years'] ?> yr</div></div>
+                    <div class="col-md-3"><div class="text-muted small"><?= $booking['sale_type'] === 'cash' ? 'Payment Plan' : 'Installments' ?></div><div class="fw-medium"><?= $booking['sale_type'] === 'cash' ? 'Cash Sale (full payment)' : (int)($booking['installment_months'] ?: $booking['installment_years'] * 12) . ' monthly' ?></div></div>
                 </div>
                 <hr>
                 <div class="row g-2">
@@ -117,6 +124,24 @@ include '../includes/header.php';
         </div>
     </div>
 
+    <?php if ($booking['sale_type'] === 'cash'): ?>
+    <div class="tab-pane fade" id="bCash">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="mb-3"><i class="bi bi-cash-coin me-2 text-success"></i>Cash Payment</h6>
+                <div class="row g-3">
+                    <div class="col-md-3"><div class="text-muted small">Payment Mode</div><div class="fw-medium"><?= e(($firstReceipt['bank_name'] ?? '') ?: 'Cash') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Received Amount</div><div class="fw-medium"><?= fmt_money($totalPaid) ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Balance</div><div class="fw-medium text-success"><?= fmt_money($grandTotal - $totalPaid) ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Reference</div><div class="fw-medium"><?= e($firstReceipt['reference'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Receipt No</div><div class="fw-medium"><?= $firstReceipt ? '<a href="receipt_print.php?id=' . $firstReceipt['id'] . '" target="_blank">' . e($firstReceipt['receipt_no']) . '</a>' : '-' ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Payment Date</div><div class="fw-medium"><?= $firstReceipt ? fmt_date($firstReceipt['receipt_date']) : '-' ?></div></div>
+                </div>
+                <div class="alert alert-success mt-3 mb-0"><i class="bi bi-check-circle me-1"></i>Paid in full - this is a cash sale, property marked as sold.</div>
+            </div>
+        </div>
+    </div>
+    <?php else: ?>
     <div class="tab-pane fade" id="bInst">
         <div class="card">
             <div class="card-body p-0">
@@ -158,6 +183,7 @@ include '../includes/header.php';
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="tab-pane fade" id="bReceipts">
         <div class="card">

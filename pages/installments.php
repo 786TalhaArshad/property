@@ -44,37 +44,83 @@ if (is_post() && $canEdit) {
 }
 
 $status = $_GET['status'] ?? '';
-$records = db_all("SELECT i.*, b.booking_no, b.total_price, c.full_name AS customer_name, p.property_no,
+$sale_type = $_GET['sale_type'] ?? 'installment';
+if (!in_array($sale_type, ['installment', 'cash', ''], true)) $sale_type = 'installment';
+$project_id = (int)($_GET['project_id'] ?? active_project_id());
+
+$records = db_all("SELECT i.*, b.booking_no, b.total_price, b.sale_type, b.installment_months,
+                   c.full_name AS customer_name, p.property_no, p.project_id, pr.name AS project_name,
                    (i.amount - i.paid_amount) AS balance
                    FROM installments i
                    JOIN bookings b ON b.id = i.booking_id
                    JOIN customers c ON c.id = b.customer_id
                    JOIN properties p ON p.id = b.property_id
+                   LEFT JOIN projects pr ON pr.id = p.project_id
                    WHERE (? = '' OR i.status = ?)
-                   ORDER BY i.due_date ASC", [$status, $status]);
+                     AND (? = '' OR b.sale_type = ?)
+                     AND (? = 0 OR p.project_id = ?)
+                   ORDER BY i.due_date ASC", [$status, $status, $sale_type, $sale_type, $project_id, $project_id]);
+
+$totalAmount = 0.0; $totalPaid = 0.0; $totalBalance = 0.0;
+foreach ($records as $r) {
+    $totalAmount += (float)$r['amount'];
+    $totalPaid += (float)$r['paid_amount'];
+    $totalBalance += (float)$r['balance'];
+}
+$projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
 $paymentMethods = db_all("SELECT * FROM payment_methods ORDER BY name");
 $banks = db_all("SELECT * FROM banks ORDER BY name");
 include '../includes/header.php';
 ?>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card stat-card bg-grad-blue"><div class="stat-body"><div class="stat-icon"><i class="bi bi-layers"></i></div><div><div class="stat-label">QISTEEN</div><div class="stat-value"><?= $totalCount = count($records) ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-green"><div class="stat-body"><div class="stat-icon"><i class="bi bi-cash-coin"></i></div><div><div class="stat-label">RECEIVED</div><div class="stat-value"><?= fmt_money($totalPaid) ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-orange"><div class="stat-body"><div class="stat-icon"><i class="bi bi-wallet2"></i></div><div><div class="stat-label">OUTSTANDING</div><div class="stat-value"><?= fmt_money($totalBalance) ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-purple"><div class="stat-body"><div class="stat-icon"><i class="bi bi-collection"></i></div><div><div class="stat-label">TOTAL AMOUNT</div><div class="stat-value"><?= fmt_money($totalAmount) ?></div></div></div></div></div>
+</div>
+
+<form method="get" class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-3">
+                <select name="project_id" class="form-select form-select-sm">
+                    <option value="0">All Projects</option>
+                    <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= $project_id === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="sale_type" class="form-select form-select-sm">
+                    <option value="installment" <?= $sale_type === 'installment' ? 'selected' : '' ?>>Installment Sales</option>
+                    <option value="" <?= $sale_type === '' ? 'selected' : '' ?>>All (incl. Cash)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Status</option>
+                    <?php foreach (['pending', 'partial', 'paid', 'overdue', 'waived'] as $s): ?>
+                        <option value="<?= $s ?>" <?= $status === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2"><button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel me-1"></i>Filter</button></div>
+            <div class="col-md-3 text-end small text-muted">Qisteen: <strong><?= count($records) ?></strong></div>
+        </div>
+    </div>
+</form>
 
 <div class="toolbar d-flex flex-wrap align-items-center gap-2">
     <div class="input-group input-group-sm" style="max-width:280px">
         <span class="input-group-text"><i class="bi bi-search"></i></span>
         <input type="text" class="form-control table-search" data-table="#dataTable" placeholder="Search installments...">
     </div>
-    <select class="form-select form-select-sm" style="max-width:160px" onchange="location.href='?status='+this.value">
-        <option value="">All Status</option>
-        <?php foreach (['pending', 'partial', 'paid', 'overdue', 'waived'] as $s): ?>
-            <option value="<?= $s ?>" <?= $status === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
-        <?php endforeach; ?>
-    </select>
 </div>
 
 <div class="card">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover mb-0" id="dataTable">
-                <thead><tr><th style="width:50px">#</th><th>Booking</th><th>Customer</th><th>Property</th><th>Type</th><th>Due Date</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><?php if ($canEdit): ?><th class="text-end">Action</th><?php endif; ?></tr></thead>
+                <thead><tr><th style="width:50px">#</th><th>Booking</th><th>Customer</th><th>Property</th><th>Project</th><th>Plan</th><th>Type</th><th>Due Date</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><?php if ($canEdit): ?><th class="text-end">Action</th><?php endif; ?></tr></thead>
                 <tbody>
                 <?php foreach ($records as $i => $r): ?>
                     <tr>
@@ -82,6 +128,8 @@ include '../includes/header.php';
                         <td><a class="fw-medium text-decoration-none" href="booking_view.php?id=<?= $r['booking_id'] ?>"><?= e($r['booking_no']) ?></a></td>
                         <td><?= e($r['customer_name']) ?></td>
                         <td><?= e($r['property_no']) ?></td>
+                        <td class="small"><?= $r['project_name'] ? '<span class="badge bg-light text-dark border">' . e($r['project_name']) . '</span>' : '-' ?></td>
+                        <td class="small"><?= $r['sale_type'] === 'installment' ? (int)$r['installment_months'] . ' monthly' : '<span class="badge bg-success">Cash</span>' ?></td>
                         <td><span class="badge bg-light text-dark border"><?= ucfirst($r['installment_type']) ?></span></td>
                         <td><?= fmt_date($r['due_date']) ?></td>
                         <td><?= fmt_money($r['amount']) ?></td>
@@ -98,7 +146,7 @@ include '../includes/header.php';
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$records): ?>
-                    <tr><td colspan="<?= $canEdit ? 12 : 11 ?>"><div class="empty-state"><i class="bi bi-calendar2-check"></i><p>No installments found</p></div></td></tr>
+                    <tr><td colspan="<?= $canEdit ? 14 : 13 ?>"><div class="empty-state"><i class="bi bi-calendar2-check"></i><p>No installments found</p></div></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

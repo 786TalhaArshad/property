@@ -170,7 +170,7 @@ function fmt_num($n) {
 }
 
 function fmt_date($d) {
-    return $d && $d !== '0000-00-00' ? date('d-M-Y', strtotime($d)) : '-';
+    return $d && $d !== '0000-00-00' ? date('d/m/y', strtotime($d)) : '-';
 }
 
 function upload_file($field, $dir, $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx']) {
@@ -197,6 +197,65 @@ function next_number($prefix, $table, $column = 'id') {
     $row = db_get("SELECT MAX(CAST(SUBSTRING($column, LENGTH(?) + 2) AS UNSIGNED)) AS max_no FROM $table WHERE $column LIKE CONCAT(?, '%')", [$prefix, $prefix]);
     $n = (int)($row['max_no'] ?? 0) + 1;
     return $prefix . '-' . str_pad($n, 4, '0', STR_PAD_LEFT);
+}
+
+function coa_id_by_code($code) {
+    $a = db_get("SELECT id FROM chart_of_accounts WHERE code = ?", [$code]);
+    return $a ? (int)$a['id'] : 0;
+}
+
+function cash_bank_account_id($bankId = 0) {
+    if ($bankId > 0) {
+        $code = '1001-' . str_pad((string)(int)$bankId, 3, '0', STR_PAD_LEFT);
+        $acc = db_get("SELECT id FROM chart_of_accounts WHERE code = ?", [$code]);
+        if ($acc) return (int)$acc['id'];
+        $parentId = coa_id_by_code('1001');
+        if (!$parentId) {
+            $parentId = db_exec("INSERT INTO chart_of_accounts (code, name, account_type, parent_id, created_date, created_time, updated_date, updated_time) VALUES ('1001','Bank Accounts','asset',0,CURDATE(),CURTIME(),CURDATE(),CURTIME())");
+        }
+        return (int)db_exec("INSERT INTO chart_of_accounts (code, name, account_type, parent_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$code, 'Bank ' . (int)$bankId, 'asset', $parentId]);
+    }
+    return coa_id_by_code('1000');
+}
+
+function employee_payable_account_id($employee_id, $employee_name) {
+    $parent = db_get("SELECT id FROM chart_of_accounts WHERE code = '2050'");
+    if (!$parent) {
+        $parentId = db_exec("INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES ('2050','Employee Payable','liability',NULL,0,CURDATE(),CURTIME(),CURDATE(),CURTIME())");
+    } else {
+        $parentId = (int)$parent['id'];
+    }
+    $code = '2050-' . str_pad((int)$employee_id, 3, '0', STR_PAD_LEFT);
+    $acc = db_get("SELECT id FROM chart_of_accounts WHERE code = ?", [$code]);
+    if ($acc) return (int)$acc['id'];
+    return (int)db_exec("INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+        [$code, $employee_name, 'liability', $parentId]);
+}
+
+function contractor_payable_account_id($contractor_id, $contractor_name) {
+    $parent = db_get("SELECT id FROM chart_of_accounts WHERE code = '2060'");
+    if (!$parent) {
+        $parentId = db_exec("INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES ('2060','Contractor Payable','liability',NULL,0,CURDATE(),CURTIME(),CURDATE(),CURTIME())");
+    } else {
+        $parentId = (int)$parent['id'];
+    }
+    $code = '2060-' . str_pad((int)$contractor_id, 3, '0', STR_PAD_LEFT);
+    $acc = db_get("SELECT id FROM chart_of_accounts WHERE code = ?", [$code]);
+    if ($acc) return (int)$acc['id'];
+    return (int)db_exec("INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+        [$code, $contractor_name, 'liability', $parentId]);
+}
+
+function post_cash_voucher($date, $voucherType, $narration, $projectId, $debitAccId, $creditAccId, $amount, $debitDesc = '', $creditDesc = '') {
+    $prefix = ['cash_payment' => 'CP', 'cash_receipt' => 'CR', 'bank_payment' => 'BP', 'bank_receipt' => 'BR', 'journal' => 'JV'][$voucherType] ?? 'JV';
+    $voucher_no = next_number($prefix, 'vouchers', 'voucher_no');
+    $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, project_id, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+        [$voucher_no, $date, $voucherType, $projectId, $narration, 'posted', $GLOBALS['user']['id']]);
+    db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+        [$vid, $debitAccId, $debitDesc, $amount]);
+    db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,0,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+        [$vid, $creditAccId, $creditDesc, $amount]);
+    return $vid;
 }
 
 function active_menu($key) {

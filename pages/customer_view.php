@@ -15,6 +15,8 @@ if (!$cust) {
 
 $ledgerStart = trim($_GET['start_date'] ?? '');
 $ledgerEnd = trim($_GET['end_date'] ?? '');
+$project_id = (int)($_GET['project_id'] ?? active_project_id());
+$property_id = (int)($_GET['property_id'] ?? 0);
 
 if (is_post() && $canEdit) {
     csrf_check();
@@ -36,7 +38,25 @@ if (is_post() && $canEdit) {
     redirect('customer_view.php?id=' . $id);
 }
 
-$bookings = db_all("SELECT b.*, p.property_no, pt.name AS type_name FROM bookings b JOIN properties p ON p.id = b.property_id LEFT JOIN property_types pt ON pt.id = p.property_type_id WHERE b.customer_id = ? AND b.status <> 'cancelled' ORDER BY b.id DESC", [$id]);
+$bookings = db_all("SELECT b.*, p.property_no, p.project_id, pt.name AS type_name, pj.name AS project_name FROM bookings b JOIN properties p ON p.id = b.property_id LEFT JOIN property_types pt ON pt.id = p.property_type_id LEFT JOIN projects pj ON pj.id = p.project_id WHERE b.customer_id = ? AND b.status <> 'cancelled' ORDER BY b.id DESC", [$id]);
+$custProjects = db_all("SELECT pj.id, pj.name, pj.status, COUNT(DISTINCT b.id) AS bookings_count, COALESCE(SUM(b.total_price - b.discount),0) AS booked_value
+                        FROM bookings b
+                        JOIN properties pr ON pr.id = b.property_id
+                        JOIN projects pj ON pj.id = pr.project_id
+                        WHERE b.customer_id = ? AND b.status <> 'cancelled'
+                        GROUP BY pj.id, pj.name, pj.status
+                        ORDER BY pj.name", [$id]);
+$custProperties = db_all("SELECT pr.id, pr.property_no, pr.project_id, pt.name AS type_name, pj.name AS project_name
+                          FROM bookings b
+                          JOIN properties pr ON pr.id = b.property_id
+                          LEFT JOIN property_types pt ON pt.id = pr.property_type_id
+                          LEFT JOIN projects pj ON pj.id = pr.project_id
+                          WHERE b.customer_id = ? AND b.status <> 'cancelled' AND (? = 0 OR pr.project_id = ?)
+                          ORDER BY pj.name, pr.property_no", [$id, $project_id, $project_id]);
+$custPropertyIds = array_map('intval', array_column($custProperties, 'id'));
+if ($property_id > 0 && !in_array($property_id, $custPropertyIds)) {
+    $property_id = 0;
+}
 $docs = db_all("SELECT d.*, dt.name AS doc_type FROM documents d LEFT JOIN document_types dt ON dt.id = d.document_type_id WHERE d.related_type = 'customer' AND d.related_id = ? ORDER BY d.id DESC", [$id]);
 $docTypes = db_all("SELECT * FROM document_types ORDER BY name");
 
@@ -45,14 +65,29 @@ $totalPaid = 0.0;
 foreach ($bookings as $b) {
     $totalBooked += (float)$b['total_price'] - (float)$b['discount'];
 }
-$paidRows = db_all("SELECT receipt_date, receipt_no, amount FROM receipts WHERE customer_id = ? ORDER BY receipt_date, id", [$id]);
+$paidRows = db_all("SELECT r.receipt_date, r.receipt_no, r.amount, r.project_id,
+                    COALESCE(pr.project_id, r.project_id, 0) AS eff_project_id,
+                    COALESCE(b.property_id, 0) AS booking_property_id,
+                    pj.name AS project_name
+                    FROM receipts r
+                    LEFT JOIN bookings b ON b.id = r.booking_id
+                    LEFT JOIN properties pr ON pr.id = b.property_id
+                    LEFT JOIN projects pj ON pj.id = COALESCE(pr.project_id, r.project_id)
+                    WHERE r.customer_id = ?
+                    ORDER BY r.receipt_date, r.id", [$id]);
 foreach ($paidRows as $pr) {
     $totalPaid += (float)$pr['amount'];
 }
-$transfers = db_all("SELECT t.*, fc.full_name AS from_name, tc.full_name AS to_name
+$transfers = db_all("SELECT t.*, fc.full_name AS from_name, tc.full_name AS to_name,
+                     COALESCE(pr.project_id, t.project_id, 0) AS eff_project_id,
+                     COALESCE(b.property_id, 0) AS booking_property_id,
+                     pj.name AS project_name
                      FROM transfers t
                      LEFT JOIN customers fc ON fc.id = t.from_customer_id
                      LEFT JOIN customers tc ON tc.id = t.to_customer_id
+                     LEFT JOIN bookings b ON b.id = t.booking_id
+                     LEFT JOIN properties pr ON pr.id = b.property_id
+                     LEFT JOIN projects pj ON pj.id = COALESCE(pr.project_id, t.project_id)
                      WHERE t.transfer_type = 'customer_to_customer' AND (t.from_customer_id = ? OR t.to_customer_id = ?)
                      ORDER BY t.transfer_date, t.id", [$id, $id]);
 $outstanding = $totalBooked - $totalPaid;
@@ -65,26 +100,48 @@ $ledBookings = [];
 foreach ($bookings as $b) {
     if ($ledgerStart !== '' && $b['booking_date'] < $ledgerStart) continue;
     if ($ledgerEnd !== '' && $b['booking_date'] > $ledgerEnd) continue;
+    if ($project_id > 0 && (int)$b['project_id'] !== $project_id) continue;
+    if ($property_id > 0 && (int)$b['property_id'] !== $property_id) continue;
     $ledBookings[] = $b;
 }
 $ledPayments = [];
 foreach ($paidRows as $pr) {
     if ($ledgerStart !== '' && $pr['receipt_date'] < $ledgerStart) continue;
     if ($ledgerEnd !== '' && $pr['receipt_date'] > $ledgerEnd) continue;
+    if ($project_id > 0 && (int)$pr['eff_project_id'] !== $project_id) continue;
+    if ($property_id > 0 && (int)$pr['booking_property_id'] !== $property_id) continue;
     $ledPayments[] = $pr;
 }
 $ledTransfers = [];
 foreach ($transfers as $t) {
     if ($ledgerStart !== '' && $t['transfer_date'] < $ledgerStart) continue;
     if ($ledgerEnd !== '' && $t['transfer_date'] > $ledgerEnd) continue;
+    if ($project_id > 0 && (int)$t['eff_project_id'] !== $project_id) continue;
+    if ($property_id > 0 && (int)$t['booking_property_id'] !== $property_id) continue;
     $ledTransfers[] = $t;
 }
 $openingBalance = 0.0;
 if ($ledgerStart !== '') {
-    $ob = (float)db_get("SELECT COALESCE(SUM(b.total_price - b.discount),0) amt FROM bookings b WHERE b.customer_id = ? AND b.status <> 'cancelled' AND b.booking_date < ?", [$id, $ledgerStart])['amt'];
-    $op = (float)db_get("SELECT COALESCE(SUM(amount),0) amt FROM receipts WHERE customer_id = ? AND receipt_date < ?", [$id, $ledgerStart])['amt'];
+    $ob = (float)db_get("SELECT COALESCE(SUM(b.total_price - b.discount),0) amt FROM bookings b
+                         JOIN properties pr ON pr.id = b.property_id
+                         WHERE b.customer_id = ? AND b.status <> 'cancelled' AND b.booking_date < ?
+                         AND (? = 0 OR pr.project_id = ?) AND (? = 0 OR b.property_id = ?)",
+        [$id, $ledgerStart, $project_id, $project_id, $property_id, $property_id])['amt'];
+    $op = (float)db_get("SELECT COALESCE(SUM(r.amount),0) amt FROM receipts r
+                         LEFT JOIN bookings b ON b.id = r.booking_id
+                         LEFT JOIN properties pr ON pr.id = b.property_id
+                         WHERE r.customer_id = ? AND r.receipt_date < ?
+                         AND (? = 0 OR COALESCE(pr.project_id, r.project_id) = ?)
+                         AND (? = 0 OR COALESCE(b.property_id, 0) = ?)",
+        [$id, $ledgerStart, $project_id, $project_id, $property_id, $property_id])['amt'];
     $ot = db_get("SELECT COALESCE(SUM(CASE WHEN to_customer_id = ? THEN amount WHEN from_customer_id = ? THEN -amount ELSE 0 END),0) amt
-                  FROM transfers WHERE transfer_type = 'customer_to_customer' AND (from_customer_id = ? OR to_customer_id = ?) AND transfer_date < ?", [$id, $id, $id, $id, $ledgerStart]);
+                  FROM transfers t
+                  LEFT JOIN bookings b ON b.id = t.booking_id
+                  LEFT JOIN properties pr ON pr.id = b.property_id
+                  WHERE t.transfer_type = 'customer_to_customer' AND (t.from_customer_id = ? OR t.to_customer_id = ?) AND t.transfer_date < ?
+                  AND (? = 0 OR COALESCE(pr.project_id, t.project_id) = ?)
+                  AND (? = 0 OR COALESCE(b.property_id, 0) = ?)",
+        [$id, $id, $id, $id, $ledgerStart, $project_id, $project_id, $property_id, $property_id]);
     $openingBalance = $ob - $op + (float)$ot['amt'];
 }
 
@@ -110,6 +167,7 @@ include '../includes/header.php';
 <ul class="nav nav-pills mb-3">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cProfile">Profile</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#cBookings">Bookings (<?= count($bookings) ?>)</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#cProjects">Projects (<?= count($custProjects) ?>)</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#cLedger">Ledger</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#cDocs">Documents (<?= count($docs) ?>)</button></li>
 </ul>
@@ -160,10 +218,48 @@ include '../includes/header.php';
         </div>
     </div>
 
+    <div class="tab-pane fade" id="cProjects">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Project</th><th>Bookings</th><th>Booked Value</th><th class="text-end">Actions</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($custProjects as $pj): ?>
+                            <tr>
+                                <td><a href="project_view.php?id=<?= $pj['id'] ?>"><?= e($pj['name']) ?></a></td>
+                                <td><?= (int)$pj['bookings_count'] ?></td>
+                                <td><?= fmt_money($pj['booked_value']) ?></td>
+                                <td class="text-end">
+                                    <a href="customer_view.php?id=<?= $id ?>&project_id=<?= $pj['id'] ?>#cLedger" class="btn btn-sm btn-outline-primary"><i class="bi bi-book"></i> Ledger</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$custProjects): ?><tr><td colspan="4" class="text-center text-muted py-4">No projects yet</td></tr><?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="tab-pane fade" id="cLedger">
         <div class="card">
             <div class="card-body">
-                <form method="get" action="customer_view.php?id=<?= $id ?>#cLedger" class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <form method="get" action="customer_view.php#cLedger" class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <input type="hidden" name="id" value="<?= $id ?>">
+                    <select name="project_id" class="form-select form-select-sm" style="max-width:220px">
+                        <option value="0">All Projects</option>
+                        <?php foreach ($custProjects as $pj): ?>
+                            <option value="<?= $pj['id'] ?>" <?= $project_id === (int)$pj['id'] ? 'selected' : '' ?>><?= e($pj['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="property_id" class="form-select form-select-sm" style="max-width:220px">
+                        <option value="0">All Properties</option>
+                        <?php foreach ($custProperties as $pp): ?>
+                            <option value="<?= $pp['id'] ?>" <?= $property_id === (int)$pp['id'] ? 'selected' : '' ?>><?= e($pp['project_name'] ?? '') ?><?= ($pp['project_name'] ?? '') !== '' ? ' - ' : '' ?><?= e($pp['property_no']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                     <div class="input-group input-group-sm" style="max-width:170px">
                         <span class="input-group-text"><i class="bi bi-calendar"></i></span>
                         <input type="date" name="start_date" class="form-control" value="<?= e($ledgerStart) ?>">
@@ -174,41 +270,42 @@ include '../includes/header.php';
                     </div>
                     <button class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
                     <a href="customer_view.php?id=<?= $id ?>#cLedger" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+                    <a href="customer_ledger_print.php?id=<?= $id ?>&project_id=<?= $project_id ?>&property_id=<?= $property_id ?>&start_date=<?= e($ledgerStart) ?>&end_date=<?= e($ledgerEnd) ?>" class="btn btn-outline-secondary btn-sm ms-auto" target="_blank"><i class="bi bi-printer me-1"></i> Print</a>
                 </form>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
-                        <thead><tr><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Description</th><th>Project</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
                         <tbody>
                         <?php
                         $balance = $openingBalance;
                         if ($ledgerStart !== '' || $ledgerEnd !== '') {
-                            echo '<tr><td>' . fmt_date($ledgerStart) . '</td><td>Opening Balance</td><td>-</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
+                            echo '<tr><td>' . fmt_date($ledgerStart) . '</td><td>Opening Balance</td><td>-</td><td>-</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
                         }
                         foreach ($ledBookings as $b) {
                             $balance += (float)$b['total_price'] - (float)$b['discount'];
-                            echo '<tr><td>' . fmt_date($b['booking_date']) . '</td><td>Booking ' . e($b['booking_no']) . ' - ' . e($b['property_no']) . '</td><td>' . fmt_money((float)$b['total_price'] - (float)$b['discount']) . '</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
+                            echo '<tr><td>' . fmt_date($b['booking_date']) . '</td><td>Booking ' . e($b['booking_no']) . ' - ' . e($b['property_no']) . '</td><td>' . e($b['project_name'] ?? '-') . '</td><td>' . fmt_money((float)$b['total_price'] - (float)$b['discount']) . '</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
                         }
                         foreach ($ledTransfers as $t) {
                             if ($t['to_customer_id'] == $id) {
                                 $balance += (float)$t['amount'];
-                                echo '<tr><td>' . fmt_date($t['transfer_date']) . '</td><td>Transfer from ' . e($t['from_name'] ?? '-') . ' <a class="small" href="transfers.php">(' . e($t['transfer_no']) . ')</a></td><td>' . fmt_money((float)$t['amount']) . '</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
+                                echo '<tr><td>' . fmt_date($t['transfer_date']) . '</td><td>Transfer from ' . e($t['from_name'] ?? '-') . ' <a class="small" href="transfers.php">(' . e($t['transfer_no']) . ')</a></td><td>' . e($t['project_name'] ?? '-') . '</td><td>' . fmt_money((float)$t['amount']) . '</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
                             } else {
                                 $balance -= (float)$t['amount'];
-                                echo '<tr><td>' . fmt_date($t['transfer_date']) . '</td><td>Transfer to ' . e($t['to_name'] ?? '-') . ' <a class="small" href="transfers.php">(' . e($t['transfer_no']) . ')</a></td><td>-</td><td>' . fmt_money((float)$t['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
+                                echo '<tr><td>' . fmt_date($t['transfer_date']) . '</td><td>Transfer to ' . e($t['to_name'] ?? '-') . ' <a class="small" href="transfers.php">(' . e($t['transfer_no']) . ')</a></td><td>' . e($t['project_name'] ?? '-') . '</td><td>-</td><td>' . fmt_money((float)$t['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
                             }
                         }
                         foreach ($ledPayments as $pr) {
                             $balance -= (float)$pr['amount'];
-                            echo '<tr><td>' . fmt_date($pr['receipt_date']) . '</td><td>Payment ' . e($pr['receipt_no']) . '</td><td>-</td><td>' . fmt_money((float)$pr['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
+                            echo '<tr><td>' . fmt_date($pr['receipt_date']) . '</td><td>Payment ' . e($pr['receipt_no']) . '</td><td>' . e($pr['project_name'] ?? '-') . '</td><td>-</td><td>' . fmt_money((float)$pr['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
                         }
                         if (!$ledBookings && !$ledTransfers && !$ledPayments && $ledgerStart === '' && $ledgerEnd === '') {
-                            echo '<tr><td colspan="5" class="text-center text-muted py-4">No ledger entries yet</td></tr>';
+                            echo '<tr><td colspan="6" class="text-center text-muted py-4">No ledger entries yet</td></tr>';
                         }
                         ?>
                         </tbody>
                         <tfoot>
                         <tr class="table-light">
-                            <td colspan="4" class="text-end fw-bold"><?= ($ledgerStart !== '' || $ledgerEnd !== '') ? 'Closing Balance' : 'Outstanding Balance' ?></td>
+                            <td colspan="5" class="text-end fw-bold"><?= ($ledgerStart !== '' || $ledgerEnd !== '') ? 'Closing Balance' : 'Outstanding Balance' ?></td>
                             <td class="fw-bold"><?= fmt_money($balance) ?></td>
                         </tr>
                         </tfoot>

@@ -95,7 +95,7 @@ include '../includes/header.php';
                         <td><span class="badge bg-light text-dark border"><?= e($r['role_name']) ?></span></td>
                         <td><?= e($r['branch_name'] ?? '-') ?></td>
                         <td><?= e($r['phone']) ?></td>
-                        <td class="small text-muted"><?= $r['last_login'] ? date('d-M-Y H:i', strtotime($r['last_login'])) : '-' ?></td>
+                        <td class="small text-muted"><?= $r['last_login'] ? date('d/m/y H:i', strtotime($r['last_login'])) : '-' ?></td>
                         <td><?= $r['status'] ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' ?></td>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#recordModal" data-edit='<?= h(json_encode(['id' => $r['id'], 'username' => $r['username'], 'full_name' => $r['full_name'], 'role_id' => $r['role_id'], 'branch_id' => $r['branch_id'], 'email' => $r['email'], 'phone' => $r['phone'], 'status' => $r['status']])) ?>'><i class="bi bi-pencil"></i></button>

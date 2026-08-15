@@ -67,6 +67,7 @@ include '../includes/header.php';
         <span class="input-group-text"><i class="bi bi-search"></i></span>
         <input type="text" class="form-control table-search" data-table="#dataTable" placeholder="Search vouchers...">
     </div>
+    <a class="btn btn-outline-secondary btn-sm" href="vouchers_print.php?project_id=<?= $project_id ?>&from=<?= e($from) ?>&to=<?= e($to) ?>" target="_blank" title="Print all vouchers"><i class="bi bi-printer me-1"></i>Print</a>
     <?php if ($canEdit): ?>
     <a class="btn btn-primary ms-auto" href="voucher_form.php"><i class="bi bi-plus-lg me-1"></i>New Voucher</a>
     <?php endif; ?>

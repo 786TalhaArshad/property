@@ -99,7 +99,13 @@ include '../includes/header.php';
 
 <?php if ($account): ?>
 <div class="card">
-    <div class="card-header"><i class="bi bi-book me-2"></i><?= e($account['name']) ?> (<?= e($account['code']) ?>)<?= $include_children ? ' <span class="badge bg-secondary ms-1">incl. sub-heads</span>' : '' ?></div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div><i class="bi bi-book me-2"></i><?= e($account['name']) ?> (<?= e($account['code']) ?>)<?= $include_children ? ' <span class="badge bg-secondary ms-1">incl. sub-heads</span>' : '' ?></div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary" href="ledgers_print.php?account_id=<?= $account_id ?>&project_id=<?= $project_id ?>&from=<?= e($from) ?>&to=<?= e($to) ?><?= $include_children ? '&include_children=1' : '' ?>" target="_blank"><i class="bi bi-printer me-1"></i>Print This Ledger</a>
+            <a class="btn btn-sm btn-outline-secondary" href="ledgers_print.php?project_id=<?= $project_id ?>&from=<?= e($from) ?>&to=<?= e($to) ?>" target="_blank"><i class="bi bi-printer me-1"></i>Print All Ledgers</a>
+        </div>
+    </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover mb-0">
@@ -146,7 +152,10 @@ include '../includes/header.php';
     </div>
 </div>
 <?php else: ?>
-<div class="empty-state"><i class="bi bi-book"></i><p>Select an account to view its ledger</p></div>
+<div class="empty-state">
+    <i class="bi bi-book"></i><p>Select an account to view its ledger</p>
+    <a class="btn btn-outline-secondary btn-sm" href="ledgers_print.php?project_id=<?= $project_id ?>&from=<?= e($from) ?>&to=<?= e($to) ?>" target="_blank"><i class="bi bi-printer me-1"></i>Print All Ledgers</a>
+</div>
 <?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>

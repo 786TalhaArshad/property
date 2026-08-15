@@ -626,6 +626,71 @@ CREATE TABLE IF NOT EXISTS employee_entries (
   CONSTRAINT fk_empe_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- ===================== CONTRACTORS =====================
+
+CREATE TABLE IF NOT EXISTS contractors (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  contractor_no VARCHAR(40) NOT NULL,
+  full_name VARCHAR(180) NOT NULL,
+  company VARCHAR(180) DEFAULT NULL,
+  specialty VARCHAR(120) DEFAULT NULL,
+  cnic VARCHAR(40) DEFAULT NULL,
+  phone VARCHAR(40) DEFAULT NULL,
+  whatsapp VARCHAR(40) DEFAULT NULL,
+  email VARCHAR(120) DEFAULT NULL,
+  address VARCHAR(255) DEFAULT NULL,
+  bank_id INT UNSIGNED DEFAULT NULL,
+  bank_account_title VARCHAR(150) DEFAULT NULL,
+  bank_account_no VARCHAR(80) DEFAULT NULL,
+  status TINYINT(1) NOT NULL DEFAULT 1,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_contractors_no (contractor_no),
+  KEY idx_contractors_bank (bank_id),
+  CONSTRAINT fk_contractors_bank FOREIGN KEY (bank_id) REFERENCES banks (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS contractor_entries (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  contractor_id INT UNSIGNED NOT NULL,
+  entry_no VARCHAR(40) NOT NULL,
+  entry_date DATE NOT NULL,
+  entry_type ENUM('payable','paid') NOT NULL,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  narration VARCHAR(255) DEFAULT NULL,
+  account_id INT UNSIGNED DEFAULT NULL,
+  project_id INT UNSIGNED DEFAULT NULL,
+  voucher_id INT UNSIGNED DEFAULT NULL,
+  created_by INT UNSIGNED DEFAULT NULL,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_conte_no (entry_no),
+  KEY idx_conte_contractor (contractor_id),
+  KEY idx_conte_date (entry_date),
+  KEY idx_conte_type (entry_type),
+  KEY idx_conte_project (project_id),
+  CONSTRAINT fk_conte_contractor FOREIGN KEY (contractor_id) REFERENCES contractors (id) ON DELETE CASCADE,
+  CONSTRAINT fk_conte_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL,
+  CONSTRAINT fk_conte_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS contractor_projects (
+  contractor_id INT UNSIGNED NOT NULL,
+  project_id INT UNSIGNED NOT NULL,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  PRIMARY KEY (contractor_id, project_id),
+  KEY idx_cp_project (project_id),
+  CONSTRAINT fk_cp_contractor FOREIGN KEY (contractor_id) REFERENCES contractors (id) ON DELETE CASCADE,
+  CONSTRAINT fk_cp_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- ===================== PROPERTIES =====================
 
 CREATE TABLE IF NOT EXISTS properties (
@@ -767,6 +832,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   transfer_charges DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   installment_plan ENUM('monthly','quarterly','half_yearly','yearly','lump_sum') NOT NULL DEFAULT 'monthly',
   installment_years INT NOT NULL DEFAULT 1,
+  installment_months INT NOT NULL DEFAULT 12,
   status ENUM('booking','active','completed','cancelled') NOT NULL DEFAULT 'booking',
   created_date DATE NOT NULL,
   created_time TIME NOT NULL,
@@ -1371,7 +1437,9 @@ INSERT INTO permissions (id, module, slug, name, created_date, created_time, upd
 (33, 'General Parties','general_parties.view',  'View General Parties',  CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (34, 'General Parties','general_parties.manage','Manage General Parties', CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (35, 'Employees',     'employees.view',         'View Employees',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
-(36, 'Employees',     'employees.manage',       'Manage Employees',      CURDATE(), CURTIME(), CURDATE(), CURTIME());
+(36, 'Employees',     'employees.manage',       'Manage Employees',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(37, 'Contractors',   'contractors.view',       'View Contractors',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(38, 'Contractors',   'contractors.manage',     'Manage Contractors',    CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 INSERT INTO role_permissions (role_id, permission_id, created_date, created_time, updated_date, updated_time)
 SELECT 1, id, CURDATE(), CURTIME(), CURDATE(), CURTIME() FROM permissions;
@@ -1494,7 +1562,9 @@ INSERT INTO chart_of_accounts (id, code, name, account_type, parent_id, opening_
 (11, '5300', 'Marketing Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (12, '5400', 'Transport Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (13, '5500', 'Miscellaneous Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
-(14, '2050', 'Employee Payable', 'liability', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
+(14, '2050', 'Employee Payable', 'liability', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(15, '2060', 'Contractor Payable', 'liability', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(16, '5600', 'Construction Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES
 ('4000-01', 'Commission Income', 'income', 6, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),

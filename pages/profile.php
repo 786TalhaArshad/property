@@ -45,7 +45,7 @@ include '../includes/header.php';
                 <h5 class="mb-0"><?= e($user['full_name']) ?></h5>
                 <span class="badge bg-primary mt-2"><?= e($user['role_name']) ?></span>
                 <p class="text-muted small mt-3 mb-0"><i class="bi bi-person"></i> <?= e($user['username']) ?></p>
-                <p class="text-muted small mb-0"><i class="bi bi-clock"></i> Last login: <?= $user['last_login'] ? date('d-M-Y H:i', strtotime($user['last_login'])) : 'Never' ?></p>
+                <p class="text-muted small mb-0"><i class="bi bi-clock"></i> Last login: <?= $user['last_login'] ? date('d/m/y H:i', strtotime($user['last_login'])) : 'Never' ?></p>
             </div>
         </div>
     </div>

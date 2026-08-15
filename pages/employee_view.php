@@ -148,25 +148,66 @@ if (is_post() && $canEdit) {
     redirect('employee_view.php?id=' . $id);
 }
 
-$entries = db_all("SELECT ee.*, u.full_name AS created_name FROM employee_entries ee LEFT JOIN users u ON u.id = ee.created_by WHERE ee.employee_id = ? ORDER BY ee.entry_date, ee.id", [$id]);
+$empAccId = employee_account_id($id, $employee['full_name']);
+$entries = db_all("SELECT ee.*, u.full_name AS created_name, v.voucher_no AS linked_voucher_no
+                   FROM employee_entries ee
+                   LEFT JOIN users u ON u.id = ee.created_by
+                   LEFT JOIN vouchers v ON v.id = ee.voucher_id
+                   WHERE ee.employee_id = ? ORDER BY ee.entry_date, ee.id", [$id]);
+$voucherLines = db_all("SELECT vi.item_description, vi.debit, vi.credit, v.voucher_no, v.voucher_date, v.narration AS voucher_narration
+                        FROM voucher_items vi
+                        JOIN vouchers v ON v.id = vi.voucher_id
+                        WHERE vi.account_id = ? AND v.status = 'posted'
+                          AND v.id NOT IN (SELECT ee2.voucher_id FROM employee_entries ee2 WHERE ee2.employee_id = ? AND ee2.voucher_id IS NOT NULL)
+                        ORDER BY v.voucher_date, v.id", [$empAccId, $id]);
 $banks = db_all("SELECT * FROM banks ORDER BY name");
 $accounts = db_all("SELECT * FROM chart_of_accounts ORDER BY code");
 $salariesAcc = db_get("SELECT id FROM chart_of_accounts WHERE code = '5000'");
+
+$ledger = [];
+foreach ($entries as $e) {
+    $ledger[] = [
+        'date' => $e['entry_date'],
+        'entry_no' => $e['entry_no'],
+        'entry_type' => $e['entry_type'],
+        'amount' => (float)$e['amount'],
+        'narration' => $e['narration'],
+        'entry_id' => (int)$e['id'],
+        'voucher_no' => $e['linked_voucher_no'],
+        'is_entry' => true,
+    ];
+}
+foreach ($voucherLines as $vl) {
+    $amt = (float)$vl['debit'] > 0 ? (float)$vl['debit'] : (float)$vl['credit'];
+    $narr = trim($vl['voucher_narration'] ?? '') !== '' ? $vl['voucher_narration'] : ($vl['item_description'] ?? '');
+    $ledger[] = [
+        'date' => $vl['voucher_date'],
+        'entry_no' => $vl['voucher_no'],
+        'entry_type' => (float)$vl['credit'] > 0 ? 'payable' : 'paid',
+        'amount' => $amt,
+        'narration' => $narr,
+        'entry_id' => 0,
+        'voucher_no' => $vl['voucher_no'],
+        'is_entry' => false,
+    ];
+}
+usort($ledger, function ($a, $b) {
+    return strcmp($a['date'], $b['date']) ?: strcmp($a['entry_no'], $b['entry_no']);
+});
 
 $totalPayable = 0.0;
 $totalPaid = 0.0;
 $running = [];
 $bal = 0.0;
-foreach ($entries as $e) {
-    $amt = (float)$e['amount'];
-    if ($e['entry_type'] === 'payable') {
-        $totalPayable += $amt;
-        $bal += $amt;
+foreach ($ledger as $i => $row) {
+    if ($row['entry_type'] === 'payable') {
+        $totalPayable += $row['amount'];
+        $bal += $row['amount'];
     } else {
-        $totalPaid += $amt;
-        $bal -= $amt;
+        $totalPaid += $row['amount'];
+        $bal -= $row['amount'];
     }
-    $running[$e['id']] = $bal;
+    $running[$i] = $bal;
 }
 $balance = $totalPayable - $totalPaid;
 
@@ -260,28 +301,37 @@ include '../includes/header.php';
                     <table class="table table-hover mb-0">
                         <thead><tr><th>Date</th><th>Entry No</th><th>Type</th><th>Narration</th><th class="text-end">Payable</th><th class="text-end">Paid</th><th class="text-end">Balance</th><?php if ($canEdit): ?><th class="text-end"></th><?php endif; ?></tr></thead>
                         <tbody>
-                        <?php foreach ($entries as $e): ?>
+                        <?php foreach ($ledger as $i => $row): ?>
                             <tr>
-                                <td><?= fmt_date($e['entry_date']) ?></td>
-                                <td class="fw-medium"><?= e($e['entry_no']) ?><?= $e['voucher_id'] ? ' <a class="small" href="vouchers.php" title="Journal voucher created"><i class="bi bi-journal-arrow-up text-muted"></i></a>' : '' ?></td>
-                                <td><span class="badge bg-<?= $typeLabels[$e['entry_type']][1] ?? 'secondary' ?>"><?= e($typeLabels[$e['entry_type']][0] ?? $e['entry_type']) ?></span></td>
-                                <td class="small"><?= e($e['narration'] ?? '-') ?></td>
-                                <td class="text-end"><?= $e['entry_type'] === 'payable' ? fmt_money($e['amount']) : '-' ?></td>
-                                <td class="text-end"><?= $e['entry_type'] === 'paid' ? fmt_money($e['amount']) : '-' ?></td>
-                                <td class="text-end fw-medium <?= $running[$e['id']] > 0 ? 'text-danger' : ($running[$e['id']] < 0 ? 'text-success' : '') ?>"><?= fmt_money($running[$e['id']]) ?></td>
+                                <td><?= fmt_date($row['date']) ?></td>
+                                <td class="fw-medium">
+                                    <?= e($row['entry_no']) ?>
+                                    <?php if ($row['is_entry']): ?>
+                                        <?= $row['voucher_no'] ? ' <a class="small" href="vouchers.php" title="Journal voucher created"><i class="bi bi-journal-arrow-up text-muted"></i></a>' : '' ?>
+                                    <?php else: ?>
+                                        <a class="small" href="vouchers.php" title="Posted from journal voucher"><i class="bi bi-journal-check text-muted"></i></a>
+                                    <?php endif; ?>
+                                </td>
+                                <td><span class="badge bg-<?= $typeLabels[$row['entry_type']][1] ?? 'secondary' ?>"><?= e($typeLabels[$row['entry_type']][0] ?? $row['entry_type']) ?></span></td>
+                                <td class="small"><?= e($row['narration'] !== '' ? $row['narration'] : '-') ?></td>
+                                <td class="text-end"><?= $row['entry_type'] === 'payable' ? fmt_money($row['amount']) : '-' ?></td>
+                                <td class="text-end"><?= $row['entry_type'] === 'paid' ? fmt_money($row['amount']) : '-' ?></td>
+                                <td class="text-end fw-medium <?= $running[$i] > 0 ? 'text-danger' : ($running[$i] < 0 ? 'text-success' : '') ?>"><?= fmt_money($running[$i]) ?></td>
                                 <?php if ($canEdit): ?>
                                 <td class="text-end">
-                                    <form method="post" class="d-inline" data-confirm="Delete this entry?<?= $e['voucher_id'] ? ' The linked journal voucher will also be removed.' : '' ?>">
+                                    <?php if ($row['is_entry']): ?>
+                                    <form method="post" class="d-inline" data-confirm="Delete this entry?<?= $row['voucher_no'] ? ' The linked journal voucher will also be removed.' : '' ?>">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="entry_delete">
-                                        <input type="hidden" name="id" value="<?= $e['id'] ?>">
+                                        <input type="hidden" name="id" value="<?= $row['entry_id'] ?>">
                                         <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                                     </form>
+                                    <?php endif; ?>
                                 </td>
                                 <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if (!$entries): ?><tr><td colspan="<?= $canEdit ? 8 : 7 ?>" class="text-center text-muted py-4">No entries yet</td></tr><?php endif; ?>
+                        <?php if (!$ledger): ?><tr><td colspan="<?= $canEdit ? 8 : 7 ?>" class="text-center text-muted py-4">No entries yet</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

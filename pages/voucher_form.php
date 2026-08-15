@@ -83,6 +83,7 @@ if (is_post()) {
 
 $accounts = db_all("SELECT * FROM chart_of_accounts ORDER BY account_type, code");
 $projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
+$employees = db_all("SELECT id, full_name FROM employees ORDER BY full_name");
 include '../includes/header.php';
 ?>
 
@@ -141,6 +142,18 @@ include '../includes/header.php';
     <div class="card mt-3">
         <div class="card-header"><i class="bi bi-list-ol me-2"></i>Entries</div>
         <div class="card-body">
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-4">
+                    <select id="selAddEmp" class="form-select form-select-sm">
+                        <option value="">-- Add Employee Salary Line --</option>
+                        <?php foreach ($employees as $emp): ?><option value="<?= $emp['id'] ?>" data-name="<?= e($emp['full_name']) ?>"><?= e($emp['full_name']) ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="button" id="btnAddEmp" class="btn btn-sm btn-outline-success"><i class="bi bi-person-plus me-1"></i>Add Employee Line</button>
+                </div>
+                <div class="col-md-5"><div class="form-text">Employee choose karo aur Add daba do — uska 2050-&lt;id&gt; account + naam ki line auto-add ho jayegi, sirf amount dalni hai.</div></div>
+            </div>
             <div class="table-responsive">
                 <table class="table align-middle mb-0" id="linesTable">
                     <thead>
@@ -229,6 +242,40 @@ foreach ($accounts as $a) {
         });
     }
     table.tBodies[0].querySelectorAll('tr').forEach(function (row) { bind(row); });
+
+    var selAddEmp = document.getElementById('selAddEmp');
+    var btnAddEmp = document.getElementById('btnAddEmp');
+    if (selAddEmp && btnAddEmp) {
+        var empAccCache = {};
+        function esc(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        btnAddEmp.addEventListener('click', function () {
+            var opt = selAddEmp.options[selAddEmp.selectedIndex];
+            if (!opt || !opt.value) return;
+            var empId = opt.value;
+            function addLine(accId) {
+                var tr = document.createElement('tr');
+                tr.innerHTML = '<td><select name="account_id[]" class="form-select form-select-sm"><option value="">Select Account</option>' + options + '</select></td>' +
+                    '<td><input type="text" name="item_description[]" class="form-control form-control-sm" value="' + esc(opt.dataset.name || '') + '"></td>' +
+                    '<td><input type="number" step="0.01" name="debit[]" class="form-control form-control-sm line-debit" value="0"></td>' +
+                    '<td><input type="number" step="0.01" name="credit[]" class="form-control form-control-sm line-credit" value="0"></td>' +
+                    '<td><button type="button" class="btn btn-sm btn-outline-danger btn-del-line"><i class="bi bi-x-lg"></i></button></td>';
+                var sel = tr.querySelector('select');
+                if (accId) sel.value = String(accId);
+                table.tBodies[0].appendChild(tr);
+                bind(tr);
+                var amt = tr.querySelector('.line-debit');
+                if (amt) { amt.focus(); amt.select(); }
+            }
+            if (empAccCache[empId]) { addLine(empAccCache[empId]); return; }
+            fetch('ajax.php?action=employee_payable_account&id=' + empId).then(function (r) { return r.json(); }).then(function (d) {
+                empAccCache[empId] = (d && d.id) || 0;
+                addLine(empAccCache[empId]);
+            });
+        });
+    }
+
     function calc() {
         var d = 0, c = 0;
         table.tBodies[0].querySelectorAll('.line-debit').forEach(function (el) { d += parseFloat(el.value) || 0; });

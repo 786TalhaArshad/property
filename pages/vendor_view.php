@@ -45,6 +45,14 @@ foreach ($payments as $p) {
     $total += (float)$p['amount'];
 }
 
+$purchases = db_all("SELECT p.*,
+    (SELECT COALESCE(SUM(pi.amount),0) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS items_total
+    FROM purchases p WHERE p.vendor_id = ? ORDER BY p.purchase_date DESC", [$id]);
+$totalPurchases = 0.0;
+foreach ($purchases as $pu) {
+    $totalPurchases += (float)$pu['total_amount'];
+}
+
 include '../includes/header.php';
 ?>
 
@@ -56,13 +64,14 @@ include '../includes/header.php';
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-md-4"><div class="card stat-card bg-grad-blue"><div class="stat-body"><div class="stat-icon"><i class="bi bi-truck"></i></div><div><div class="stat-label">TOTAL PAYMENTS</div><div class="stat-value"><?= count($payments) ?></div></div></div></div></div>
-    <div class="col-md-4"><div class="card stat-card bg-grad-green"><div class="stat-body"><div class="stat-icon"><i class="bi bi-cash-coin"></i></div><div><div class="stat-label">TOTAL PAID</div><div class="stat-value"><?= fmt_money($total) ?></div></div></div></div></div>
-    <div class="col-md-4"><div class="card stat-card bg-grad-purple"><div class="stat-body"><div class="stat-icon"><i class="bi bi-person-badge"></i></div><div><div class="stat-label">CONTACT</div><div class="stat-value small"><?= e($vendor['contact_person'] ?: '-') ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-blue"><div class="stat-body"><div class="stat-icon"><i class="bi bi-bag"></i></div><div><div class="stat-label">TOTAL PURCHASES</div><div class="stat-value"><?= count($purchases) ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-green"><div class="stat-body"><div class="stat-icon"><i class="bi bi-receipt"></i></div><div><div class="stat-label">PURCHASE AMOUNT</div><div class="stat-value"><?= fmt_money($totalPurchases) ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-orange"><div class="stat-body"><div class="stat-icon"><i class="bi bi-cash-coin"></i></div><div><div class="stat-label">TOTAL PAID</div><div class="stat-value"><?= fmt_money($total) ?></div></div></div></div></div>
+    <div class="col-md-3"><div class="card stat-card bg-grad-purple"><div class="stat-body"><div class="stat-icon"><i class="bi bi-person-badge"></i></div><div><div class="stat-label">CONTACT</div><div class="stat-value small"><?= e($vendor['contact_person'] ?: '-') ?></div></div></div></div></div>
 </div>
 
 <div class="row g-3">
-    <div class="col-xl-5">
+    <div class="col-xl-4">
         <div class="card">
             <div class="card-header"><i class="bi bi-info-circle me-2"></i>Vendor Details</div>
             <div class="card-body">
@@ -80,7 +89,31 @@ include '../includes/header.php';
             </div>
         </div>
     </div>
-    <div class="col-xl-7">
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-bag me-2"></i>Purchases</div>
+            <div class="card-body">
+                <div class="table-responsive" style="max-height:400px">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Date</th><th>No</th><th class="text-end">Amount</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($purchases as $pu): ?>
+                            <tr>
+                                <td><?= fmt_date($pu['purchase_date']) ?></td>
+                                <td class="small"><a href="purchase_view.php?id=<?= $pu['id'] ?>"><?= e($pu['purchase_no']) ?></a></td>
+                                <td class="text-end"><?= fmt_money($pu['total_amount']) ?></td>
+                                <td><?= status_badge($pu['status']) ?></td>
+                                <td><a href="purchase_view.php?id=<?= $pu['id'] ?>" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$purchases): ?><tr><td colspan="5" class="text-center text-muted py-4">No purchases yet</td></tr><?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
         <div class="card">
             <div class="card-header"><i class="bi bi-cash-coin me-2"></i>Payments</div>
             <div class="card-body">

@@ -112,18 +112,18 @@ if (is_post()) {
                 $no = 1;
                 $book = $token_amount + $booking_amount;
                 $bookingInstId = null;
+                $project = db_get("SELECT project_id FROM properties WHERE id = ?", [$property_id]);
+                $projectId = $project ? (int)$project['project_id'] : null;
                 if ($book > 0) {
                     $bookingInstId = db_exec("INSERT INTO installments (booking_id, installment_no, installment_type, due_date, amount, penalty, paid_amount, status, paid_date, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,0,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
                         [$booking_id, $no++, 'booking', $booking_date, $book, $book, 'paid', $booking_date, $user['id']]);
 
                     $receipt_no = next_number('RCT', 'receipts', 'receipt_no');
                     $remarks = $sale_type === 'cash' ? 'Full cash sale' : 'Booking amount';
-                    db_exec("INSERT INTO receipts (receipt_no, receipt_date, customer_id, booking_id, installment_id, amount, payment_method_id, bank_id, reference, remarks, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-                        [$receipt_no, $booking_date, $customer_id, $booking_id, $bookingInstId, $book, $payment_method_id, $bank_id, $reference, $remarks, $user['id']]);
+                    db_exec("INSERT INTO receipts (receipt_no, receipt_date, project_id, customer_id, booking_id, installment_id, amount, payment_method_id, bank_id, reference, remarks, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                        [$receipt_no, $booking_date, $projectId, $customer_id, $booking_id, $bookingInstId, $book, $payment_method_id, $bank_id, $reference, $remarks, $user['id']]);
                 }
                 if ($sale_type === 'cash' && $book > 0) {
-                    $project = db_get("SELECT project_id FROM properties WHERE id = ?", [$property_id]);
-                    $projectId = $project ? (int)$project['project_id'] : null;
                     $cashAcc = db_get("SELECT id FROM chart_of_accounts WHERE code = '1000'");
                     $incomeAcc = db_get("SELECT id FROM chart_of_accounts WHERE code = '4000'");
                     $ledgerAccId = 0;

@@ -32,8 +32,20 @@ if (is_post() && $canEdit) {
         if ($amount <= 0) {
             flash('danger', 'Enter a valid amount.');
         } else {
-            db_exec("INSERT INTO receipts (receipt_no, receipt_date, customer_id, booking_id, installment_id, amount, payment_method_id, bank_id, reference, remarks, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-                [$receipt_no, $receipt_date, $booking['customer_id'], $booking['id'], $installment_id, $amount, $payment_method_id, $bank_id, $reference, $remarks, $user['id']]);
+            $project = db_get("SELECT p.project_id FROM properties p WHERE p.id = ?", [$booking['property_id']]);
+            $projectId = $project ? (int)$project['project_id'] : (active_project_id() ?: null);
+            $receiptId = db_exec("INSERT INTO receipts (receipt_no, receipt_date, project_id, customer_id, booking_id, installment_id, amount, payment_method_id, bank_id, reference, remarks, received_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                [$receipt_no, $receipt_date, $projectId, $booking['customer_id'], $booking['id'], $installment_id, $amount, $payment_method_id, $bank_id, $reference, $remarks, $user['id']]);
+            $voucherId = null;
+            $cashAcc = cash_bank_account_id($bank_id);
+            $incomeAcc = coa_id_by_code('4000');
+            if ($cashAcc && $incomeAcc) {
+                $bankLabel = $bank_id ? (db_get("SELECT name FROM banks WHERE id = ?", [$bank_id])['name'] ?? 'Bank') : 'Cash';
+                $voucherId = post_cash_voucher($receipt_date, 'cash_receipt', 'Installment received - ' . $booking['booking_no'] . ' (' . $bankLabel . ')', $projectId, $cashAcc, $incomeAcc, $amount, 'Receipt ' . $receipt_no, 'Sale income - ' . $booking['booking_no']);
+            }
+            if ($voucherId) {
+                db_exec("UPDATE receipts SET voucher_id = ?, project_id = COALESCE(project_id, ?) WHERE id = ?", [$voucherId, $projectId, $receiptId]);
+            }
             $newPaid = (float)$inst['paid_amount'] + $amount;
             $newStatus = $newPaid >= (float)$inst['amount'] ? 'paid' : 'partial';
             db_exec("UPDATE installments SET paid_amount = ?, status = ?, paid_date = ?, received_by = ?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$newPaid, $newStatus, $receipt_date, $user['id'], $installment_id]);

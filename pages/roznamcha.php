@@ -24,6 +24,9 @@ if (is_post() && $canEdit) {
                 db_exec("UPDATE installments SET paid_amount = ?, status = ?, paid_date = NULL, updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$newPaid, $newStatus, $rec['installment_id']]);
             }
         }
+        if ($rec && !empty($rec['voucher_id'])) {
+            db_exec("DELETE FROM vouchers WHERE id = ?", [$rec['voucher_id']]);
+        }
         db_exec("DELETE FROM receipts WHERE id = ?", [$rid]);
         flash('success', 'Receipt deleted.');
         redirect('roznamcha.php');

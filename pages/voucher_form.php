@@ -67,12 +67,14 @@ if (is_post()) {
         redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
     }
 
+    $projectId = (int)($_POST['project_id'] ?? 0) ?: null;
+
     if ($edit_id > 0) {
-        db_exec("UPDATE vouchers SET voucher_no=?, voucher_date=?, voucher_type=?, project_id=?, narration=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$voucher_no, $voucher_date, $voucher_type, $project_id, $narration, $status, $edit_id]);
+        db_exec("UPDATE vouchers SET voucher_no=?, voucher_date=?, voucher_type=?, project_id=?, narration=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$voucher_no, $voucher_date, $voucher_type, $projectId, $narration, $status, $edit_id]);
         db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$edit_id]);
         $vid = $edit_id;
     } else {
-        $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, project_id, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$voucher_no, $voucher_date, $voucher_type, $project_id, $narration, $status, $user['id']]);
+        $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, project_id, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$voucher_no, $voucher_date, $voucher_type, $projectId, $narration, $status, $user['id']]);
     }
     foreach ($lines as $line) {
         db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$vid, $line[0], $line[1], $line[2], $line[3]]);
@@ -98,6 +100,27 @@ include '../includes/header.php';
         <div class="card-header"><i class="bi bi-receipt me-2"></i>Voucher Details</div>
         <div class="card-body">
             <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Search Party <small class="text-muted">(Quick Add — Name / CNIC / Phone / Code)</small></label>
+                    <div class="position-relative">
+                        <input type="text" id="partySearch" class="form-control form-control-lg" placeholder="Type customer, vendor, employee name, CNIC..." autocomplete="off">
+                        <div id="searchResults" class="list-group position-absolute w-100" style="z-index:1050;display:none;max-height:350px;overflow-y:auto"></div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <div id="partyInfoMini" class="form-control-plaintext text-muted small" style="display:none">
+                        <span class="fw-bold" id="partyNameMini"></span>
+                        <span class="badge ms-1" id="partyTypeBadgeMini"></span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-outline-success d-none" id="btnAddPartyLine"><i class="bi bi-plus-lg me-1"></i>Add Party Line</button>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-0">
                 <div class="col-md-3">
                     <label class="form-label">Voucher No</label>
                     <input type="text" name="voucher_no" class="form-control" placeholder="Auto" value="<?= e($record['voucher_no'] ?? '') ?>">
@@ -118,11 +141,10 @@ include '../includes/header.php';
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Project</label>
-                    <select name="project_id" class="form-select" disabled>
-                        <option value="">-- General / No Project --</option>
+                    <select name="project_id" class="form-select">
+                        <option value="0">-- General / No Project --</option>
                         <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= (int)$project_id === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
                     </select>
-                    <div class="form-text">Locked to the active project selected in the header.</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Status</label>
@@ -142,18 +164,6 @@ include '../includes/header.php';
     <div class="card mt-3">
         <div class="card-header"><i class="bi bi-list-ol me-2"></i>Entries</div>
         <div class="card-body">
-            <div class="row g-2 align-items-center mb-2">
-                <div class="col-md-4">
-                    <select id="selAddEmp" class="form-select form-select-sm">
-                        <option value="">-- Add Employee Salary Line --</option>
-                        <?php foreach ($employees as $emp): ?><option value="<?= $emp['id'] ?>" data-name="<?= e($emp['full_name']) ?>"><?= e($emp['full_name']) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button type="button" id="btnAddEmp" class="btn btn-sm btn-outline-success"><i class="bi bi-person-plus me-1"></i>Add Employee Line</button>
-                </div>
-                <div class="col-md-5"><div class="form-text">Employee choose karo aur Add daba do — uska 2050-&lt;id&gt; account + naam ki line auto-add ho jayegi, sirf amount dalni hai.</div></div>
-            </div>
             <div class="table-responsive">
                 <table class="table align-middle mb-0" id="linesTable">
                     <thead>
@@ -217,16 +227,50 @@ foreach ($accounts as $a) {
 (function () {
     var table = document.getElementById('linesTable');
     var options = <?= json_encode($accountOptions) ?>;
-    document.getElementById('btnAddLine').addEventListener('click', function () {
+
+    var partySearch = document.getElementById('partySearch');
+    var searchResults = document.getElementById('searchResults');
+    var partyInfoMini = document.getElementById('partyInfoMini');
+    var partyNameMini = document.getElementById('partyNameMini');
+    var partyTypeBadgeMini = document.getElementById('partyTypeBadgeMini');
+    var btnAddPartyLine = document.getElementById('btnAddPartyLine');
+    var debounceTimer = null;
+    var selectedPartyAccountId = 0;
+    var selectedPartyName = '';
+
+    var typeLabels = {
+        customer: { label: 'Customer', cls: 'bg-primary' },
+        vendor: { label: 'Vendor', cls: 'bg-success' },
+        owner: { label: 'Owner', cls: 'bg-warning text-dark' },
+        dealer: { label: 'Dealer', cls: 'bg-info' },
+        employee: { label: 'Employee', cls: 'bg-secondary' },
+        contractor: { label: 'Contractor', cls: 'bg-dark' },
+        investor: { label: 'Investor', cls: 'bg-purple' },
+        tenant: { label: 'Tenant', cls: 'bg-danger' }
+    };
+
+    function esc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function addRow(accountId, description) {
         var tr = document.createElement('tr');
         tr.innerHTML = '<td><select name="account_id[]" class="form-select form-select-sm"><option value="">Select Account</option>' + options + '</select></td>' +
-            '<td><input type="text" name="item_description[]" class="form-control form-control-sm"></td>' +
+            '<td><input type="text" name="item_description[]" class="form-control form-control-sm" value="' + esc(description || '') + '"></td>' +
             '<td><input type="number" step="0.01" name="debit[]" class="form-control form-control-sm line-debit" value="0"></td>' +
             '<td><input type="number" step="0.01" name="credit[]" class="form-control form-control-sm line-credit" value="0"></td>' +
             '<td><button type="button" class="btn btn-sm btn-outline-danger btn-del-line"><i class="bi bi-x-lg"></i></button></td>';
+        var sel = tr.querySelector('select');
+        if (accountId) sel.value = String(accountId);
         table.tBodies[0].appendChild(tr);
-        bind(tr);
-    });
+        bindRow(tr);
+        var amt = tr.querySelector('.line-debit');
+        if (amt) { amt.focus(); amt.select(); }
+        return tr;
+    }
+
+    document.getElementById('btnAddLine').addEventListener('click', function () { addRow(0, ''); });
+
     table.addEventListener('click', function (e) {
         if (e.target.closest('.btn-del-line')) {
             var rows = table.tBodies[0].rows;
@@ -236,45 +280,90 @@ foreach ($accounts as $a) {
             }
         }
     });
-    function bind(row) {
+
+    function bindRow(row) {
         row.querySelectorAll('.line-debit, .line-credit').forEach(function (el) {
             el.addEventListener('input', calc);
         });
     }
-    table.tBodies[0].querySelectorAll('tr').forEach(function (row) { bind(row); });
+    table.tBodies[0].querySelectorAll('tr').forEach(function (row) { bindRow(row); });
 
-    var selAddEmp = document.getElementById('selAddEmp');
-    var btnAddEmp = document.getElementById('btnAddEmp');
-    if (selAddEmp && btnAddEmp) {
-        var empAccCache = {};
-        function esc(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    btnAddPartyLine.addEventListener('click', function () {
+        if (!selectedPartyAccountId) return;
+        addRow(selectedPartyAccountId, selectedPartyName);
+    });
+
+    partySearch.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); }
+    });
+
+    partySearch.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        var q = partySearch.value.trim();
+        if (q.length < 2) { searchResults.style.display = 'none'; return; }
+        debounceTimer = setTimeout(function () {
+            fetch('<?= BASE_URL ?>/pages/ajax.php?action=party_search&q=' + encodeURIComponent(q) + '&_t=' + Date.now())
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    searchResults.innerHTML = '';
+                    if (data && data.error) {
+                        searchResults.innerHTML = '<div class="list-group-item text-danger">' + data.error + '</div>';
+                        searchResults.style.display = 'block';
+                        return;
+                    }
+                    if (!data || !Array.isArray(data) || data.length === 0) {
+                        searchResults.innerHTML = '<div class="list-group-item text-muted">No results found</div>';
+                        searchResults.style.display = 'block';
+                        return;
+                    }
+                    data.forEach(function (item) {
+                        var tl = typeLabels[item.type] || { label: item.type, cls: 'bg-secondary' };
+                        var detail = item.code ? item.code : '';
+                        if (item.cnic) detail += (detail ? ' | ' : '') + 'CNIC: ' + item.cnic;
+                        if (item.phone) detail += (detail ? ' | ' : '') + item.phone;
+                        var div = document.createElement('button');
+                        div.type = 'button';
+                        div.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                        div.innerHTML = '<div><div class="fw-medium">' + (item.name || '') + '</div>' +
+                            (detail ? '<div class="small text-muted">' + detail + '</div>' : '') + '</div>' +
+                            '<span class="badge ' + tl.cls + '">' + tl.label + '</span>';
+                        div.addEventListener('click', function () {
+                            partySearch.value = item.name || '';
+                            searchResults.style.display = 'none';
+                            selectedPartyAccountId = 0;
+                            selectedPartyName = item.name || '';
+                            partyNameMini.textContent = item.name || '';
+                            var tl2 = typeLabels[item.type] || { label: item.type, cls: 'bg-secondary' };
+                            partyTypeBadgeMini.textContent = tl2.label;
+                            partyTypeBadgeMini.className = 'badge ' + tl2.cls;
+                            partyInfoMini.style.display = '';
+                            btnAddPartyLine.classList.add('d-none');
+                            fetch('<?= BASE_URL ?>/pages/ajax.php?action=party_account&type=' + item.type + '&id=' + item.id + '&_t=' + Date.now())
+                                .then(function (r) { return r.json(); })
+                                .then(function (d) {
+                                    if (d && d.account_id) {
+                                        selectedPartyAccountId = d.account_id;
+                                        btnAddPartyLine.classList.remove('d-none');
+                                    }
+                                })
+                                .catch(function () {});
+                        });
+                        searchResults.appendChild(div);
+                    });
+                    searchResults.style.display = 'block';
+                })
+                .catch(function () {
+                    searchResults.innerHTML = '<div class="list-group-item text-danger">Search failed. Please try again.</div>';
+                    searchResults.style.display = 'block';
+                });
+        }, 300);
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!partySearch.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.style.display = 'none';
         }
-        btnAddEmp.addEventListener('click', function () {
-            var opt = selAddEmp.options[selAddEmp.selectedIndex];
-            if (!opt || !opt.value) return;
-            var empId = opt.value;
-            function addLine(accId) {
-                var tr = document.createElement('tr');
-                tr.innerHTML = '<td><select name="account_id[]" class="form-select form-select-sm"><option value="">Select Account</option>' + options + '</select></td>' +
-                    '<td><input type="text" name="item_description[]" class="form-control form-control-sm" value="' + esc(opt.dataset.name || '') + '"></td>' +
-                    '<td><input type="number" step="0.01" name="debit[]" class="form-control form-control-sm line-debit" value="0"></td>' +
-                    '<td><input type="number" step="0.01" name="credit[]" class="form-control form-control-sm line-credit" value="0"></td>' +
-                    '<td><button type="button" class="btn btn-sm btn-outline-danger btn-del-line"><i class="bi bi-x-lg"></i></button></td>';
-                var sel = tr.querySelector('select');
-                if (accId) sel.value = String(accId);
-                table.tBodies[0].appendChild(tr);
-                bind(tr);
-                var amt = tr.querySelector('.line-debit');
-                if (amt) { amt.focus(); amt.select(); }
-            }
-            if (empAccCache[empId]) { addLine(empAccCache[empId]); return; }
-            fetch('ajax.php?action=employee_payable_account&id=' + empId).then(function (r) { return r.json(); }).then(function (d) {
-                empAccCache[empId] = (d && d.id) || 0;
-                addLine(empAccCache[empId]);
-            });
-        });
-    }
+    });
 
     function calc() {
         var d = 0, c = 0;

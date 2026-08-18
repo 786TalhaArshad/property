@@ -14,7 +14,9 @@ if (is_logged_in()) {
     $timeout = (int)setting('session_timeout', 60) * 60;
     if (isset($_SESSION['last_active']) && (time() - $_SESSION['last_active']) > $timeout) {
         unset($_SESSION['user_id'], $_SESSION['last_active']);
-        redirect(BASE_URL . '/login.php');
+        if (empty($_ajax_request)) {
+            redirect(BASE_URL . '/login.php');
+        }
     }
     $_SESSION['last_active'] = time();
 

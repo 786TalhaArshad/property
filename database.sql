@@ -691,6 +691,44 @@ CREATE TABLE IF NOT EXISTS contractor_projects (
   CONSTRAINT fk_cp_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS investors (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  investor_no VARCHAR(40) NOT NULL,
+  full_name VARCHAR(180) NOT NULL,
+  cnic VARCHAR(40) DEFAULT NULL,
+  phone VARCHAR(40) DEFAULT NULL,
+  whatsapp VARCHAR(40) DEFAULT NULL,
+  email VARCHAR(120) DEFAULT NULL,
+  address VARCHAR(255) DEFAULT NULL,
+  bank_account_title VARCHAR(120) DEFAULT NULL,
+  bank_account_no VARCHAR(60) DEFAULT NULL,
+  investment_type VARCHAR(60) DEFAULT NULL,
+  status TINYINT(1) NOT NULL DEFAULT 1,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_investors_no (investor_no)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS investor_ledger (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  investor_id INT UNSIGNED NOT NULL,
+  entry_date DATE NOT NULL,
+  description VARCHAR(255) DEFAULT NULL,
+  debit DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  credit DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  balance DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_il_investor (investor_id),
+  CONSTRAINT fk_il_investor FOREIGN KEY (investor_id) REFERENCES investors (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- ===================== PROPERTIES =====================
 
 CREATE TABLE IF NOT EXISTS properties (
@@ -898,6 +936,7 @@ CREATE TABLE IF NOT EXISTS receipts (
   reference VARCHAR(80) DEFAULT NULL,
   remarks VARCHAR(255) DEFAULT NULL,
   received_by INT UNSIGNED DEFAULT NULL,
+  voucher_id INT UNSIGNED DEFAULT NULL,
   created_date DATE NOT NULL,
   created_time TIME NOT NULL,
   updated_date DATE NOT NULL,
@@ -1247,6 +1286,57 @@ CREATE TABLE IF NOT EXISTS transfers (
   CONSTRAINT fk_tr_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- ===================== PURCHASES =====================
+
+CREATE TABLE IF NOT EXISTS purchases (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  purchase_no VARCHAR(40) NOT NULL,
+  vendor_id INT UNSIGNED NOT NULL,
+  purchase_date DATE NOT NULL,
+  project_id INT UNSIGNED DEFAULT NULL,
+  narration VARCHAR(255) DEFAULT NULL,
+  total_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  discount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  paid_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  payment_mode ENUM('cash','bank') NOT NULL DEFAULT 'cash',
+  bank_id INT UNSIGNED DEFAULT NULL,
+  reference VARCHAR(80) DEFAULT NULL,
+  voucher_id INT UNSIGNED DEFAULT NULL,
+  payment_voucher_id INT UNSIGNED DEFAULT NULL,
+  status ENUM('pending','partial','paid','cancelled') NOT NULL DEFAULT 'pending',
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_purchases_no (purchase_no),
+  KEY idx_purchases_vendor (vendor_id),
+  KEY idx_purchases_project (project_id),
+  KEY idx_purchases_date (purchase_date),
+  CONSTRAINT fk_purchases_vendor FOREIGN KEY (vendor_id) REFERENCES vendors (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_purchases_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL,
+  CONSTRAINT fk_purchases_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL,
+  CONSTRAINT fk_purchases_pvoucher FOREIGN KEY (payment_voucher_id) REFERENCES vouchers (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS purchase_items (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  purchase_id INT UNSIGNED NOT NULL,
+  description VARCHAR(255) DEFAULT NULL,
+  expense_account_id INT UNSIGNED NOT NULL,
+  quantity DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+  unit_price DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  created_date DATE NOT NULL,
+  created_time TIME NOT NULL,
+  updated_date DATE NOT NULL,
+  updated_time TIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_pi_purchase (purchase_id),
+  CONSTRAINT fk_pi_purchase FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE,
+  CONSTRAINT fk_pi_account FOREIGN KEY (expense_account_id) REFERENCES chart_of_accounts (id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
 -- ===================== CRM =====================
 
 CREATE TABLE IF NOT EXISTS leads (
@@ -1439,7 +1529,11 @@ INSERT INTO permissions (id, module, slug, name, created_date, created_time, upd
 (35, 'Employees',     'employees.view',         'View Employees',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (36, 'Employees',     'employees.manage',       'Manage Employees',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (37, 'Contractors',   'contractors.view',       'View Contractors',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
-(38, 'Contractors',   'contractors.manage',     'Manage Contractors',    CURDATE(), CURTIME(), CURDATE(), CURTIME());
+(38, 'Contractors',   'contractors.manage',     'Manage Contractors',    CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(39, 'Purchases',     'purchases.view',         'View Purchases',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(40, 'Purchases',     'purchases.manage',       'Manage Purchases',      CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(41, 'Investors',     'investors.view',         'View Investors',        CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(42, 'Investors',     'investors.manage',       'Manage Investors',      CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 INSERT INTO role_permissions (role_id, permission_id, created_date, created_time, updated_date, updated_time)
 SELECT 1, id, CURDATE(), CURTIME(), CURDATE(), CURTIME() FROM permissions;
@@ -1564,7 +1658,9 @@ INSERT INTO chart_of_accounts (id, code, name, account_type, parent_id, opening_
 (13, '5500', 'Miscellaneous Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (14, '2050', 'Employee Payable', 'liability', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
 (15, '2060', 'Contractor Payable', 'liability', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
-(16, '5600', 'Construction Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
+(16, '5600', 'Construction Expense', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(17, '5700', 'Purchases', 'expense', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),
+(18, '2070', 'Investor Payable', 'liability', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 INSERT INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time) VALUES
 ('4000-01', 'Commission Income', 'income', 6, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME()),

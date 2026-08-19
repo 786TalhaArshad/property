@@ -102,11 +102,12 @@ $streets = db_all("SELECT s.*, b.name AS block_name FROM streets s LEFT JOIN blo
 $images = db_all("SELECT * FROM project_images WHERE project_id = ? ORDER BY id DESC", [$id]);
 $docs = db_all("SELECT * FROM project_documents WHERE project_id = ? ORDER BY id DESC", [$id]);
 
-$materialCost = (float)db_get("SELECT COALESCE(SUM(mi.total_amount),0) amt FROM material_issues mi WHERE mi.project_id = ?", [$id])['amt'];
+$hasMiTable = (bool)(db_get("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'material_issues'")['c'] ?? 0);
+$materialCost = $hasMiTable ? (float)db_get("SELECT COALESCE(SUM(mi.total_amount),0) amt FROM material_issues mi WHERE mi.project_id = ?", [$id])['amt'] : 0.0;
 $contractorPayable = (float)db_get("SELECT COALESCE(SUM(ce.amount),0) amt FROM contractor_entries ce WHERE ce.project_id = ? AND ce.entry_type = 'payable'", [$id])['amt'];
 $contractorPaid = (float)db_get("SELECT COALESCE(SUM(ce.amount),0) amt FROM contractor_entries ce WHERE ce.project_id = ? AND ce.entry_type = 'paid'", [$id])['amt'];
 $totalInvestment = $materialCost + $contractorPaid;
-$recentIssues = db_all("SELECT mi.*, c.full_name AS contractor_name FROM material_issues mi LEFT JOIN contractors c ON c.id = mi.contractor_id WHERE mi.project_id = ? ORDER BY mi.issue_date DESC, mi.id DESC LIMIT 10", [$id]);
+$recentIssues = $hasMiTable ? db_all("SELECT mi.*, c.full_name AS contractor_name FROM material_issues mi LEFT JOIN contractors c ON c.id = mi.contractor_id WHERE mi.project_id = ? ORDER BY mi.issue_date DESC, mi.id DESC LIMIT 10", [$id]) : [];
 
 include '../includes/header.php';
 ?>

@@ -83,10 +83,11 @@ $recentReceipts = db_all("SELECT r.receipt_no, r.receipt_date, r.amount, c.full_
                           WHERE p.project_id = ?
                           ORDER BY r.receipt_date DESC, r.id DESC LIMIT 8", [$id]);
 
-$materialCost = (float)db_get("SELECT COALESCE(SUM(mi.total_amount),0) amt FROM material_issues mi WHERE mi.project_id = ?", [$id])['amt'];
+$hasMiTable = (bool)(db_get("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'material_issues'")['c'] ?? 0);
+$materialCost = $hasMiTable ? (float)db_get("SELECT COALESCE(SUM(mi.total_amount),0) amt FROM material_issues mi WHERE mi.project_id = ?", [$id])['amt'] : 0.0;
 $contractorPaid = (float)db_get("SELECT COALESCE(SUM(ce.amount),0) amt FROM contractor_entries ce WHERE ce.project_id = ? AND ce.entry_type = 'paid'", [$id])['amt'];
 $totalInvestment = $materialCost + $contractorPaid;
-$materialIssueCount = (int)db_get("SELECT COUNT(*) c FROM material_issues mi WHERE mi.project_id = ?", [$id])['c'];
+$materialIssueCount = $hasMiTable ? (int)db_get("SELECT COUNT(*) c FROM material_issues mi WHERE mi.project_id = ?", [$id])['c'] : 0;
 
 include '../includes/header.php';
 ?>

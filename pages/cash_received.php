@@ -155,8 +155,8 @@ if (is_post() && $canEdit) {
         }
         flash('success', 'Amount received. Receipt No: ' . $receipt_no . ', Voucher ' . $vid . ' posted.');
     } elseif ($partyType === 'tenant') {
-        db_exec("INSERT INTO rent_collections (schedule_id, agreement_id, collection_date, amount, payment_method_id, bank_id, reference, remarks, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-            [$scheduleId, $agreementId, $date, $amount, null, $bankId, $reference, $narration]);
+        db_exec("INSERT INTO rent_collections (schedule_id, agreement_id, collection_date, amount, payment_method_id, bank_id, reference, remarks, voucher_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$scheduleId, $agreementId, $date, $amount, null, $bankId, $reference, $narration, $vid]);
         rc_recalc_schedule($scheduleId);
         flash('success', 'Rent received. Voucher ' . $vid . ' posted.');
     } else {

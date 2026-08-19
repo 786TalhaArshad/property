@@ -36,30 +36,78 @@ foreach ($monthly as $m) {
 }
 $net = $totIncome - $totExpense;
 $projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
+$projectName = '';
+foreach ($projects as $p) { if ((int)$p['id'] === $project_id) { $projectName = $p['name']; break; } }
+
+$chartLabels = []; $chartIncome = []; $chartExpense = []; $chartNet = [];
+foreach ($monthly as $m) {
+    $chartLabels[] = date('M y', strtotime($m['ym'] . '-01'));
+    $chartIncome[] = (float)$m['income'];
+    $chartExpense[] = (float)$m['expense'];
+    $chartNet[] = (float)$m['income'] - (float)$m['expense'];
+}
 include '../../includes/header.php';
 ?>
 
-<form method="get" class="card mb-3">
+<style>
+@media print {
+    .no-print, .sidebar, .main-header, .main-footer, .quick-action-btn { display: none !important; }
+    .main-content { margin: 0 !important; padding: 10px !important; }
+    .card { border: none !important; box-shadow: none !important; }
+    body { font-size: 11px; }
+    .table td, .table th { padding: 4px 6px !important; font-size: 11px; }
+}
+</style>
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3 no-print">
+    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Income / Expense Report</h5>
+    <div class="ms-auto"><button onclick="window.print()" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>Print</button></div>
+</div>
+
+<form method="get" class="card mb-3 no-print">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
-            <div class="col-md-2"><input type="date" name="from" class="form-control" value="<?= e($from) ?>"></div>
-            <div class="col-md-2"><input type="date" name="to" class="form-control" value="<?= e($to) ?>"></div>
+            <div class="col-md-2"><label class="form-label small text-muted mb-0">From</label><input type="date" name="from" class="form-control" value="<?= e($from) ?>"></div>
+            <div class="col-md-2"><label class="form-label small text-muted mb-0">To</label><input type="date" name="to" class="form-control" value="<?= e($to) ?>"></div>
             <div class="col-md-3">
+                <label class="form-label small text-muted mb-0">Project</label>
                 <select name="project_id" class="form-select">
                     <option value="">All Projects</option>
                     <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" <?= $project_id === (int)$p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option><?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-2"><button class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>View</button></div>
+            <div class="col-md-2"><label class="form-label mb-0">&nbsp;</label><button class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>View</button></div>
         </div>
     </div>
 </form>
+
+<div class="card print-only" style="display:none">
+    <div class="text-center mb-2">
+        <h5 class="mb-0"><?= e(setting('company_name', APP_NAME)) ?></h5>
+        <div class="small text-muted">Income / Expense Report from <?= fmt_date($from) ?> to <?= fmt_date($to) ?><?= $projectName ? ' | ' . e($projectName) : '' ?></div>
+    </div>
+</div>
 
 <div class="row g-3 mb-3">
     <div class="col-md-3"><div class="card stat-card bg-grad-green"><div class="stat-body"><div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div><div><div class="stat-label">INCOME</div><div class="stat-value"><?= fmt_money($totIncome) ?></div></div></div></div></div>
     <div class="col-md-3"><div class="card stat-card bg-grad-red"><div class="stat-body"><div class="stat-icon"><i class="bi bi-graph-down-arrow"></i></div><div><div class="stat-label">EXPENSE</div><div class="stat-value"><?= fmt_money($totExpense) ?></div></div></div></div></div>
     <div class="col-md-3"><div class="card stat-card bg-grad-purple"><div class="stat-body"><div class="stat-icon"><i class="bi bi-cash-stack"></i></div><div><div class="stat-label">NET PROFIT</div><div class="stat-value"><?= fmt_money($net) ?></div></div></div></div></div>
     <div class="col-md-3"><div class="card stat-card bg-grad-cyan"><div class="stat-body"><div class="stat-icon"><i class="bi bi-percent"></i></div><div><div class="stat-label">MARGIN</div><div class="stat-value"><?= $totIncome > 0 ? number_format($net / $totIncome * 100, 1) : '0.0' ?>%</div></div></div></div></div>
+</div>
+
+<div class="row g-3 mb-3 no-print">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Monthly Income vs Expense</div>
+            <div class="card-body"><canvas id="ieChart" height="280"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-graph-up me-2"></i>Net Profit Trend</div>
+            <div class="card-body"><canvas id="netChart" height="280"></canvas></div>
+        </div>
+    </div>
 </div>
 
 <div class="row g-3">
@@ -104,5 +152,27 @@ include '../../includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+new Chart(document.getElementById('ieChart'), {
+    type: 'bar',
+    data: {
+        labels: <?= json_encode($chartLabels) ?>,
+        datasets: [
+            { label: 'Income', data: <?= json_encode($chartIncome) ?>, backgroundColor: 'rgba(75,192,192,0.7)' },
+            { label: 'Expense', data: <?= json_encode($chartExpense) ?>, backgroundColor: 'rgba(255,99,132,0.7)' }
+        ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+new Chart(document.getElementById('netChart'), {
+    type: 'line',
+    data: {
+        labels: <?= json_encode($chartLabels) ?>,
+        datasets: [{ label: 'Net Profit', data: <?= json_encode($chartNet) ?>, borderColor: '#9966ff', backgroundColor: 'rgba(153,102,255,0.2)', fill: true, tension: 0.3 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+</script>
 
 <?php include '../../includes/footer.php'; ?>

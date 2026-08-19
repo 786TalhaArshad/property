@@ -168,6 +168,43 @@ a { text-decoration: none; }
 .bg-grad-red { background: linear-gradient(135deg, #d6336c, #ff6b9d); }
 .bg-grad-slate { background: linear-gradient(135deg, #475569, #64748b); }
 
+/* ---------- Quick Actions ---------- */
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: #333;
+    min-width: 100px;
+    transition: transform .15s;
+}
+.quick-action-btn:hover { transform: translateY(-4px); color: #2d6cdf; }
+.quick-action-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: #2d6cdf;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 15px rgba(45,108,223,.35);
+    transition: background .2s, box-shadow .2s;
+}
+.quick-action-btn:hover .quick-action-circle { background: #1a4fa0; box-shadow: 0 6px 20px rgba(45,108,223,.45); }
+.quick-action-btn span { font-size: 13px; font-weight: 600; }
+.quick-key {
+    font-size: 10px;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin-top: 3px;
+    font-family: monospace;
+}
+
 /* ---------- Tables ---------- */
 .table thead th {
     background: #f7f9fc;

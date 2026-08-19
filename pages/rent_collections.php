@@ -55,7 +55,7 @@ if (is_post() && $canEdit) {
     redirect('rent_collections.php' . ($agreement_id ? '?agreement_id=' . $agreement_id : ''));
 }
 
-$records = db_all("SELECT rc.*, rs.period, ra.agreement_no, p.property_no, t.full_name AS tenant_name, pm.name AS method_name, bk.name AS bank_name
+$records = db_all("SELECT rc.*, rs.period, ra.agreement_no, ra.tenant_id, p.property_no, t.full_name AS tenant_name, pm.name AS method_name, bk.name AS bank_name
                    FROM rent_collections rc
                    JOIN rent_schedule rs ON rs.id = rc.schedule_id
                    JOIN rental_agreements ra ON ra.id = rc.agreement_id

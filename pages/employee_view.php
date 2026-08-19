@@ -139,6 +139,7 @@ if (is_post() && $canEdit) {
         $ent = db_get("SELECT * FROM employee_entries WHERE id = ? AND employee_id = ?", [$eid, $id]);
         if ($ent) {
             if ($ent['voucher_id']) {
+                db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$ent['voucher_id']]);
                 db_exec("DELETE FROM vouchers WHERE id = ?", [$ent['voucher_id']]);
             }
             db_exec("DELETE FROM employee_entries WHERE id = ?", [$eid]);

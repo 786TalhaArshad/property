@@ -32,7 +32,7 @@ if (is_post() && $canEdit) {
             db_exec("UPDATE investors SET investor_no=?, full_name=?, cnic=?, phone=?, whatsapp=?, email=?, address=?, bank_account_title=?, bank_account_no=?, investment_type=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$investor_no, $full_name, $cnic, $phone, $whatsapp, $email, $address, $bank_account_title, $bank_account_no, $investment_type, $status, $id]);
             flash('success', 'Investor updated successfully.');
         } else {
-            db_exec("INSERT INTO investors (investor_no, full_name, cnic, phone, whatsapp, email, address, bank_account_title, bank_account_no, investment_type, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$investor_no, $full_name, $cnic, $phone, $whatsapp, $email, $address, $bank_account_title, $bank_account_no, $investment_type, $status]);
+            db_exec("INSERT INTO investors (investor_no, full_name, cnic, phone, whatsapp, email, address, bank_account_title, bank_account_no, investment_type, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$investor_no, $full_name, $cnic, $phone, $whatsapp, $email, $address, $bank_account_title, $bank_account_no, $investment_type, $status]);
             flash('success', 'Investor added successfully.');
         }
     } elseif ($action === 'delete') {

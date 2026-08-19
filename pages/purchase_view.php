@@ -13,8 +13,9 @@ $purchase = db_get("SELECT p.*, v.business_name AS vendor_name, v.contact_person
                     WHERE p.id = ?", [$id]);
 if (!$purchase) { flash('danger', 'Purchase not found.'); redirect('purchases.php'); }
 
-$items = db_all("SELECT pi.*
+$items = db_all("SELECT pi.*, pr.name AS product_name, pr.product_no AS product_no_code
                  FROM purchase_items pi
+                 LEFT JOIN products pr ON pr.id = pi.product_id
                  WHERE pi.purchase_id = ? ORDER BY pi.id", [$id]);
 
 $voucher = null;
@@ -89,12 +90,19 @@ include '../includes/header.php';
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
-                        <thead><tr><th>#</th><th>Description</th><th class="text-end">Qty</th><th class="text-end">Unit Price</th><th class="text-end">Amount</th></tr></thead>
+                        <thead><tr><th>#</th><th>Product / Description</th><th class="text-end">Qty</th><th class="text-end">Unit Price</th><th class="text-end">Amount</th></tr></thead>
                         <tbody>
                         <?php foreach ($items as $i => $it): ?>
                             <tr>
                                 <td><?= $i + 1 ?></td>
-                                <td><?= e($it['description'] ?: '-') ?></td>
+                                <td>
+                                    <?php if ($it['product_name']): ?>
+                                        <a href="product_view.php?id=<?= $it['product_id'] ?>" class="fw-medium text-decoration-none"><?= e($it['product_name']) ?></a>
+                                        <div class="small text-muted"><?= e($it['description'] ?? '') ?></div>
+                                    <?php else: ?>
+                                        <?= e($it['description'] ?: '-') ?>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="text-end"><?= number_format((float)$it['quantity'], 2) ?></td>
                                 <td class="text-end"><?= fmt_money($it['unit_price']) ?></td>
                                 <td class="text-end fw-medium"><?= fmt_money($it['amount']) ?></td>

@@ -83,6 +83,11 @@ $recentReceipts = db_all("SELECT r.receipt_no, r.receipt_date, r.amount, c.full_
                           WHERE p.project_id = ?
                           ORDER BY r.receipt_date DESC, r.id DESC LIMIT 8", [$id]);
 
+$materialCost = (float)db_get("SELECT COALESCE(SUM(mi.total_amount),0) amt FROM material_issues mi WHERE mi.project_id = ?", [$id])['amt'];
+$contractorPaid = (float)db_get("SELECT COALESCE(SUM(ce.amount),0) amt FROM contractor_entries ce WHERE ce.project_id = ? AND ce.entry_type = 'paid'", [$id])['amt'];
+$totalInvestment = $materialCost + $contractorPaid;
+$materialIssueCount = (int)db_get("SELECT COUNT(*) c FROM material_issues mi WHERE mi.project_id = ?", [$id])['c'];
+
 include '../includes/header.php';
 ?>
 
@@ -134,6 +139,18 @@ include '../includes/header.php';
     <div class="col-xl-3 col-md-6"><div class="card stat-card bg-grad-orange"><div class="stat-body">
         <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
         <div><div class="stat-label">OUTSTANDING</div><div class="stat-value"><?= e(setting('currency', 'Rs.')) ?> <?= fmt_money($outstanding) ?></div></div></div></div></div>
+    <div class="col-xl-3 col-md-6"><div class="card stat-card bg-grad-red"><div class="stat-body">
+        <div class="stat-icon"><i class="bi bi-hammer"></i></div>
+        <div><div class="stat-label">MATERIAL COST</div><div class="stat-value"><?= e(setting('currency', 'Rs.')) ?> <?= fmt_money($materialCost) ?></div></div></div></div></div>
+    <div class="col-xl-3 col-md-6"><div class="card stat-card bg-grad-cyan"><div class="stat-body">
+        <div class="stat-icon"><i class="bi bi-person-workspace"></i></div>
+        <div><div class="stat-label">CONTRACTOR PAID</div><div class="stat-value"><?= e(setting('currency', 'Rs.')) ?> <?= fmt_money($contractorPaid) ?></div></div></div></div></div>
+    <div class="col-xl-3 col-md-6"><div class="card stat-card bg-grad-green"><div class="stat-body">
+        <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
+        <div><div class="stat-label">TOTAL INVESTMENT</div><div class="stat-value"><?= e(setting('currency', 'Rs.')) ?> <?= fmt_money($totalInvestment) ?></div></div></div></div></div>
+    <div class="col-xl-3 col-md-6"><div class="card stat-card bg-grad-slate"><div class="stat-body">
+        <div class="stat-icon"><i class="bi bi-box-seam"></i></div>
+        <div><div class="stat-label">MATERIAL ISSUES</div><div class="stat-value"><?= $materialIssueCount ?></div></div></div></div></div>
     <div class="col-xl-3 col-md-6"><div class="card stat-card bg-grad-slate"><div class="stat-body">
         <div class="stat-icon"><i class="bi bi-pin-map"></i></div>
         <div><div class="stat-label">PLOTS</div><div class="stat-value"><?= $plots ?></div></div></div></div></div>

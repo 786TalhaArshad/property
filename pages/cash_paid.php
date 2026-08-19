@@ -87,18 +87,24 @@ if (is_post() && $canEdit) {
     $vid = post_cash_voucher($date, $voucherType, $narr, $projectId, $accountId, $cashAcc, $amount,
         'Paid to ' . ($partyName !== '' ? $partyName : 'N/A'), 'Paid from ' . $bankName);
 
-    if ($partyType === 'vendor') {
-        db_exec("INSERT INTO vendor_payments (vendor_id, payment_date, amount, payment_method_id, bank_id, reference, remarks, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-            [$vendorId, $date, $amount, null, $bankId, $reference, $narration]);
+    if ($partyType === 'customer') {
+        db_exec("INSERT INTO customer_payments (customer_id, payment_date, amount, payment_mode, bank_id, reference, narration, voucher_id, project_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$customerId, $date, $amount, $paymentMode, $bankId, $reference, $narration, $vid, $projectId]);
+        flash('success', 'Customer payment saved. Voucher ' . $vid . ' posted.');
+    } elseif ($partyType === 'vendor') {
+        db_exec("INSERT INTO vendor_payments (vendor_id, payment_date, amount, payment_method_id, bank_id, reference, remarks, voucher_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$vendorId, $date, $amount, null, $bankId, $reference, $narration, $vid]);
         flash('success', 'Vendor payment saved. Voucher ' . $vid . ' posted.');
     } elseif ($partyType === 'dealer') {
-        db_exec("INSERT INTO dealer_payments (dealer_id, payment_date, amount, payment_method_id, bank_id, reference, remarks, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-            [$dealerId, $date, $amount, null, $bankId, $reference, $narration]);
+        db_exec("INSERT INTO dealer_payments (dealer_id, payment_date, amount, payment_method_id, bank_id, reference, remarks, voucher_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$dealerId, $date, $amount, null, $bankId, $reference, $narration, $vid]);
         flash('success', 'Dealer payment saved. Voucher ' . $vid . ' posted.');
     } elseif ($partyType === 'owner') {
+        db_exec("INSERT INTO owner_settlements (owner_id, agreement_id, settlement_date, rent_income, deductions, settlement_amount, status, payment_method_id, bank_id, remarks, voucher_id, created_date, created_time, updated_date, updated_time) VALUES (?,NULL,?,0,0,?,'paid',NULL,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$ownerId, $date, $amount, $bankId, $narration, $vid]);
         $bal = (float)db_get("SELECT COALESCE(MAX(balance),0) b FROM owner_ledger WHERE owner_id = ?", [$ownerId])['b'];
-        db_exec("INSERT INTO owner_ledger (owner_id, entry_date, description, debit, credit, balance, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-            [$ownerId, $date, 'Payment to owner', $amount, $bal - $amount]);
+        db_exec("INSERT INTO owner_ledger (owner_id, entry_date, description, debit, credit, balance, voucher_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$ownerId, $date, 'Payment to owner', $amount, $bal - $amount, $vid]);
         flash('success', 'Owner payment saved. Voucher ' . $vid . ' posted.');
     } elseif ($partyType === 'employee') {
         $entry_no = next_number('EMPE', 'employee_entries', 'entry_no');
@@ -112,8 +118,8 @@ if (is_post() && $canEdit) {
         flash('success', 'Contractor payment saved. Entry ' . $entry_no . ' saved, Voucher ' . $vid . ' posted.');
     } elseif ($partyType === 'investor') {
         $lastBal = (float)db_get("SELECT COALESCE(MAX(balance),0) b FROM investor_ledger WHERE investor_id = ?", [$investorId])['b'];
-        db_exec("INSERT INTO investor_ledger (investor_id, entry_date, description, debit, credit, balance, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-            [$investorId, $date, 'Payment to investor', $amount, $lastBal - $amount]);
+        db_exec("INSERT INTO investor_ledger (investor_id, entry_date, description, debit, credit, balance, voucher_id, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+            [$investorId, $date, 'Payment to investor', $amount, $lastBal - $amount, $vid]);
         flash('success', 'Investor payment saved. Voucher ' . $vid . ' posted.');
     } else {
         flash('success', 'Payment saved. Voucher ' . $vid . ' posted.');

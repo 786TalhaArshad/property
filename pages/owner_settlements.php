@@ -45,8 +45,13 @@ if (is_post() && $canEdit) {
             flash('success', 'Settlement marked as paid.');
         }
     } elseif ($action === 'delete') {
-        db_exec("DELETE FROM owner_settlements WHERE id=?", [(int)($_POST['id'] ?? 0)]);
-        flash('success', 'Settlement deleted successfully.');
+        $sid = (int)($_POST['id'] ?? 0);
+        $s = db_get("SELECT * FROM owner_settlements WHERE id = ?", [$sid]);
+        if ($s) {
+            db_exec("DELETE FROM owner_ledger WHERE owner_id = ? AND description = 'Owner settlement' AND entry_date = ? AND credit = ?", [$s['owner_id'], $s['settlement_date'], $s['settlement_amount']]);
+            db_exec("DELETE FROM owner_settlements WHERE id=?", [$sid]);
+            flash('success', 'Settlement deleted successfully.');
+        }
     }
     redirect('owner_settlements.php');
 }

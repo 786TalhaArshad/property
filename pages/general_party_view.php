@@ -134,6 +134,7 @@ if (is_post() && $canEdit) {
         $ent = db_get("SELECT * FROM general_party_entries WHERE id = ? AND party_id = ?", [$eid, $id]);
         if ($ent) {
             if ($ent['voucher_id']) {
+                db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$ent['voucher_id']]);
                 db_exec("DELETE FROM vouchers WHERE id = ?", [$ent['voucher_id']]);
             }
             db_exec("DELETE FROM general_party_entries WHERE id = ?", [$eid]);
@@ -191,79 +192,100 @@ include '../includes/header.php';
     <div class="col-md-3"><div class="card stat-card <?= $balance > 0 ? 'bg-grad-red' : ($balance < 0 ? 'bg-grad-cyan' : 'bg-grad-blue') ?>"><div class="stat-body"><div class="stat-icon"><i class="bi bi-wallet2"></i></div><div><div class="stat-label">BALANCE</div><div class="stat-value"><?= fmt_money($balance) ?></div></div></div></div></div>
 </div>
 
-<?php if ($canEdit): ?>
-<div class="card mb-3">
-    <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Add Entry</div>
-    <div class="card-body">
-        <form method="post">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="entry_add">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label">Entry Type</label>
-                    <select name="entry_type" id="selType" class="form-select" required>
-                        <option value="payable">Payable</option>
-                        <option value="paid">Paid</option>
-                        <option value="receiving">Receiving</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Entry No</label>
-                    <input type="text" name="entry_no" class="form-control" placeholder="Auto if blank">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Date</label>
-                    <input type="date" name="entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Amount</label>
-                    <input type="number" step="0.01" name="amount" class="form-control" required data-mask-money>
-                </div>
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#gProfile">Profile</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#gLedger">Ledger (<?= count($entries) ?>)</button></li>
+</ul>
 
-                <div class="col-md-6" id="secPayable" data-sec="payable">
-                    <label class="form-label">Debit Account</label>
-                    <select name="account_id" class="form-select">
-                        <option value="">Select Account</option>
-                        <?php foreach ($accounts as $a): ?><option value="<?= $a['id'] ?>"><?= e($a['code']) ?> - <?= e($a['name']) ?></option><?php endforeach; ?>
-                    </select>
-                    <div class="form-text">Jis account par ye payable lagega (maslan expense).</div>
-                </div>
-
-                <div class="col-md-6 d-none" id="secPayment" data-sec="paid">
-                    <label class="form-label">Payment From</label>
-                    <select name="pay_from" class="form-select">
-                        <option value="cash">Cash</option>
-                        <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
-                    </select>
-                    <div class="form-text">Paise kahaan se diye gaye.</div>
-                </div>
-
-                <div class="col-md-6 d-none" id="secReceiving" data-sec="receiving">
-                    <label class="form-label">Payment From</label>
-                    <select name="pay_from" class="form-select">
-                        <option value="cash">Cash</option>
-                        <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
-                    </select>
-                    <div class="form-text">Jahan se receiving / payment ho rahi hai.</div>
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Narration</label>
-                    <input type="text" name="narration" class="form-control" placeholder="Optional">
-                </div>
-            </div>
-            <div class="mt-3">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save Entry</button>
-            </div>
-        </form>
-    </div>
-</div>
-<?php endif; ?>
-
-<div class="row g-3">
-    <div class="col-xl-8">
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="gProfile">
         <div class="card">
-            <div class="card-header"><i class="bi bi-journal-text me-2"></i>Ledger</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3"><div class="text-muted small">Party No</div><div class="fw-medium"><?= e($party['party_no']) ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Party Name</div><div class="fw-medium"><?= e($party['party_name']) ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Contact Person</div><div class="fw-medium"><?= e($party['contact_person'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Phone</div><div class="fw-medium"><?= e($party['phone'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">WhatsApp</div><div class="fw-medium"><?= e($party['whatsapp'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Email</div><div class="fw-medium"><?= e($party['email'] ?? '-') ?></div></div>
+                    <div class="col-md-6"><div class="text-muted small">Address</div><div class="fw-medium"><?= e($party['address'] ?? '-') ?></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="gLedger">
+        <?php if ($canEdit): ?>
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Add Entry</div>
+            <div class="card-body">
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="entry_add">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Entry Type</label>
+                            <select name="entry_type" id="selType" class="form-select" required>
+                                <option value="payable">Payable</option>
+                                <option value="paid">Paid</option>
+                                <option value="receiving">Receiving</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Entry No</label>
+                            <input type="text" name="entry_no" class="form-control" placeholder="Auto if blank">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date</label>
+                            <input type="date" name="entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Amount</label>
+                            <input type="number" step="0.01" name="amount" class="form-control" required data-mask-money>
+                        </div>
+
+                        <div class="col-md-6" id="secPayable" data-sec="payable">
+                            <label class="form-label">Debit Account</label>
+                            <select name="account_id" class="form-select">
+                                <option value="">Select Account</option>
+                                <?php foreach ($accounts as $a): ?><option value="<?= $a['id'] ?>"><?= e($a['code']) ?> - <?= e($a['name']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 d-none" id="secPayment" data-sec="paid">
+                            <label class="form-label">Payment From</label>
+                            <select name="pay_from" class="form-select">
+                                <option value="cash">Cash</option>
+                                <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 d-none" id="secReceiving" data-sec="receiving">
+                            <label class="form-label">Payment From</label>
+                            <select name="pay_from" class="form-select">
+                                <option value="cash">Cash</option>
+                                <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Narration</label>
+                            <input type="text" name="narration" class="form-control" placeholder="Optional">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save Entry</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div><i class="bi bi-journal-text me-2"></i>Ledger</div>
+                <a class="btn btn-sm btn-outline-secondary" href="general_party_ledger_print.php?id=<?= $id ?>" target="_blank"><i class="bi bi-printer me-1"></i>Print</a>
+            </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
@@ -298,21 +320,6 @@ include '../includes/header.php';
             </div>
         </div>
     </div>
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-header"><i class="bi bi-info-circle me-2"></i>Party Details</div>
-            <div class="card-body">
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Party No</dt><dd class="col-sm-8"><?= e($party['party_no']) ?></dd>
-                    <dt class="col-sm-4">Contact Person</dt><dd class="col-sm-8"><?= e($party['contact_person'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Phone</dt><dd class="col-sm-8"><?= e($party['phone'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">WhatsApp</dt><dd class="col-sm-8"><?= e($party['whatsapp'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Email</dt><dd class="col-sm-8"><?= e($party['email'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Address</dt><dd class="col-sm-8"><?= e($party['address'] ?: '-') ?></dd>
-                </dl>
-            </div>
-        </div>
-    </div>
 </div>
 
 <?php if ($canEdit): ?>
@@ -330,5 +337,13 @@ include '../includes/header.php';
 })();
 </script>
 <?php endif; ?>
+
+<script>
+$(function () {
+    if (location.hash) {
+        $('.nav-pills .nav-link[data-bs-target="' + location.hash.replace(/[^a-zA-Z0-9_#]/g, '') + '"]').tab('show');
+    }
+});
+</script>
 
 <?php include '../includes/footer.php'; ?>

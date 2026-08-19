@@ -13,131 +13,159 @@ if ($edit_id > 0) {
         redirect('vouchers.php');
     }
     $title = 'Edit Voucher - ' . $record['voucher_no'];
-    $recordLines = db_all("SELECT * FROM voucher_items WHERE voucher_id = ? ORDER BY id", [$edit_id]);
 } else {
-    $title = 'New Voucher';
-    $recordLines = [];
+    $title = 'New Journal Voucher';
 }
 
 $project_id = $edit_id > 0 ? (int)($record['project_id'] ?? 0) : active_project_id();
 $project_id = $project_id ?: null;
 
-if (is_post()) {
-    csrf_check();
-    $voucher_type = $_POST['voucher_type'] ?? 'journal';
-    $prefix = ['cash_payment' => 'CP', 'cash_receipt' => 'CR', 'bank_payment' => 'BP', 'bank_receipt' => 'BR', 'journal' => 'JV'][$voucher_type] ?? 'JV';
-    $voucher_no = trim($_POST['voucher_no'] ?? '');
-    if ($voucher_no === '') {
-        $voucher_no = next_number($prefix, 'vouchers', 'voucher_no');
+function resolve_party_account($type, $id) {
+    if ($type === 'customer') return coa_id_by_code('1100');
+    if ($type === 'vendor') return coa_id_by_code('2000');
+    if ($type === 'owner') return coa_id_by_code('3000');
+    if ($type === 'dealer') return coa_id_by_code('2000');
+    if ($type === 'employee') {
+        $emp = db_get("SELECT full_name FROM employees WHERE id = ?", [$id]);
+        return $emp ? employee_payable_account_id($id, $emp['full_name']) : 0;
     }
-    $voucher_date = $_POST['voucher_date'] ?? date('Y-m-d');
-    $narration = trim($_POST['narration'] ?? '');
-    $status = $_POST['status'] ?? 'posted';
-
-    $accounts = $_POST['account_id'] ?? [];
-    $descriptions = $_POST['item_description'] ?? [];
-    $debits = $_POST['debit'] ?? [];
-    $credits = $_POST['credit'] ?? [];
-
-    $totalDebit = 0.0;
-    $totalCredit = 0.0;
-    $lines = [];
-    for ($i = 0; $i < count($accounts); $i++) {
-        $acc = (int)($accounts[$i] ?? 0);
-        $d = (float)($debits[$i] ?? 0);
-        $c = (float)($credits[$i] ?? 0);
-        if ($acc <= 0 || ($d <= 0 && $c <= 0)) {
-            continue;
-        }
-        if ($d > 0 && $c > 0) {
-            flash('danger', 'Line ' . ($i + 1) . ': a line cannot have both debit and credit.');
-            redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
-        }
-        $lines[] = [$acc, trim($descriptions[$i] ?? ''), $d, $c];
-        $totalDebit += $d;
-        $totalCredit += $c;
+    if ($type === 'contractor') {
+        $con = db_get("SELECT full_name FROM contractors WHERE id = ?", [$id]);
+        return $con ? contractor_payable_account_id($id, $con['full_name']) : 0;
     }
-
-    if (!$lines) {
-        flash('danger', 'Add at least one entry line.');
-        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
-    }
-    if (abs($totalDebit - $totalCredit) > 0.01) {
-        flash('danger', 'Debit total (' . fmt_money($totalDebit) . ') must equal credit total (' . fmt_money($totalCredit) . ').');
-        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
-    }
-
-    $projectId = (int)($_POST['project_id'] ?? 0) ?: null;
-
-    if ($edit_id > 0) {
-        db_exec("UPDATE vouchers SET voucher_no=?, voucher_date=?, voucher_type=?, project_id=?, narration=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$voucher_no, $voucher_date, $voucher_type, $projectId, $narration, $status, $edit_id]);
-        db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$edit_id]);
-        $vid = $edit_id;
-    } else {
-        $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, project_id, narration, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$voucher_no, $voucher_date, $voucher_type, $projectId, $narration, $status, $user['id']]);
-    }
-    foreach ($lines as $line) {
-        db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$vid, $line[0], $line[1], $line[2], $line[3]]);
-    }
-    flash('success', 'Voucher ' . $voucher_no . ' saved and posted.');
-    redirect('vouchers.php');
+    if ($type === 'investor') return coa_id_by_code('2070');
+    if ($type === 'tenant') return coa_id_by_code('4100');
+    return 0;
 }
 
-$accounts = db_all("SELECT * FROM chart_of_accounts ORDER BY account_type, code");
+if (is_post()) {
+    csrf_check();
+    $voucher_no = trim($_POST['voucher_no'] ?? '');
+    if ($voucher_no === '') {
+        $voucher_no = next_number('JV', 'vouchers', 'voucher_no');
+    }
+    $voucher_date = $_POST['voucher_date'] ?? date('Y-m-d');
+    $reference_no = trim($_POST['reference_no'] ?? '');
+    $narration = trim($_POST['narration'] ?? '');
+    $remarks = trim($_POST['remarks'] ?? '');
+    $status = $_POST['status'] ?? 'posted';
+    $projectId = (int)($_POST['project_id'] ?? 0) ?: null;
+    $amount = (float)($_POST['amount'] ?? 0);
+
+    $creditPartyType = trim($_POST['credit_party_type'] ?? '');
+    $creditPartyId = (int)($_POST['credit_party_id'] ?? 0);
+    $debitPartyType = trim($_POST['debit_party_type'] ?? '');
+    $debitPartyId = (int)($_POST['debit_party_id'] ?? 0);
+
+    if ($creditPartyType === '' || $creditPartyId <= 0) {
+        flash('danger', 'Please select a Credit party (Received From).');
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
+    }
+    if ($debitPartyType === '' || $debitPartyId <= 0) {
+        flash('danger', 'Please select a Debit party (Paid To).');
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
+    }
+    if ($amount <= 0) {
+        flash('danger', 'Amount must be greater than zero.');
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
+    }
+
+    $creditAccountId = resolve_party_account($creditPartyType, $creditPartyId);
+    $debitAccountId = resolve_party_account($debitPartyType, $debitPartyId);
+
+    if ($creditAccountId <= 0) {
+        flash('danger', 'Could not resolve Credit party account.');
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
+    }
+    if ($debitAccountId <= 0) {
+        flash('danger', 'Could not resolve Debit party account.');
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
+    }
+
+    global $mysqli;
+    $mysqli->begin_transaction();
+    try {
+        if ($edit_id > 0) {
+            db_exec("UPDATE vouchers SET voucher_no=?, voucher_date=?, voucher_type='journal', reference_no=?, project_id=?, narration=?, credit_party_type=?, credit_party_id=?, debit_party_type=?, debit_party_id=?, amount=?, remarks=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [
+                $voucher_no, $voucher_date, $reference_no, $projectId, $narration,
+                $creditPartyType, $creditPartyId, $debitPartyType, $debitPartyId, $amount,
+                $remarks, $status, $edit_id
+            ]);
+            db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$edit_id]);
+            $vid = $edit_id;
+        } else {
+            $vid = db_exec("INSERT INTO vouchers (voucher_no, voucher_date, voucher_type, reference_no, project_id, narration, credit_party_type, credit_party_id, debit_party_type, debit_party_id, amount, remarks, status, created_by, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [
+                $voucher_no, $voucher_date, 'journal', $reference_no, $projectId, $narration,
+                $creditPartyType, $creditPartyId, $debitPartyType, $debitPartyId, $amount,
+                $remarks, $status, $user['id']
+            ]);
+        }
+
+        db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,0,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$vid, $debitAccountId, 'Debit: ' . $narration, $amount]);
+        db_exec("INSERT INTO voucher_items (voucher_id, account_id, item_description, debit, credit, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,0,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$vid, $creditAccountId, 'Credit: ' . $narration, $amount]);
+
+        $mysqli->commit();
+        flash('success', 'Journal Voucher ' . $voucher_no . ' saved successfully.');
+        redirect('vouchers.php');
+    } catch (\Exception $e) {
+        $mysqli->rollback();
+        flash('danger', 'Failed to save voucher. Error: ' . $e->getMessage());
+        redirect($edit_id > 0 ? 'voucher_form.php?id=' . $edit_id : 'voucher_form.php');
+    }
+}
+
 $projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
-$employees = db_all("SELECT id, full_name FROM employees ORDER BY full_name");
+
+$editCreditType = $record['credit_party_type'] ?? '';
+$editCreditId = (int)($record['credit_party_id'] ?? 0);
+$editDebitType = $record['debit_party_type'] ?? '';
+$editDebitId = (int)($record['debit_party_id'] ?? 0);
+$editAmount = $record['amount'] ?? 0;
+
+$editCreditName = '';
+$editDebitName = '';
+if ($editCreditId > 0 && $editCreditType !== '') {
+    if ($editCreditType === 'customer') { $r = db_get("SELECT full_name AS name FROM customers WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+    elseif ($editCreditType === 'vendor') { $r = db_get("SELECT business_name AS name FROM vendors WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+    elseif ($editCreditType === 'owner') { $r = db_get("SELECT full_name AS name FROM owners WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+    elseif ($editCreditType === 'dealer') { $r = db_get("SELECT full_name AS name FROM dealers WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+    elseif ($editCreditType === 'employee') { $r = db_get("SELECT full_name AS name FROM employees WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+    elseif ($editCreditType === 'contractor') { $r = db_get("SELECT full_name AS name FROM contractors WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+    elseif ($editCreditType === 'investor') { $r = db_get("SELECT full_name AS name FROM investors WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+    elseif ($editCreditType === 'tenant') { $r = db_get("SELECT full_name AS name FROM tenants WHERE id=?", [$editCreditId]); $editCreditName = $r['name'] ?? ''; }
+}
+if ($editDebitId > 0 && $editDebitType !== '') {
+    if ($editDebitType === 'customer') { $r = db_get("SELECT full_name AS name FROM customers WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+    elseif ($editDebitType === 'vendor') { $r = db_get("SELECT business_name AS name FROM vendors WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+    elseif ($editDebitType === 'owner') { $r = db_get("SELECT full_name AS name FROM owners WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+    elseif ($editDebitType === 'dealer') { $r = db_get("SELECT full_name AS name FROM dealers WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+    elseif ($editDebitType === 'employee') { $r = db_get("SELECT full_name AS name FROM employees WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+    elseif ($editDebitType === 'contractor') { $r = db_get("SELECT full_name AS name FROM contractors WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+    elseif ($editDebitType === 'investor') { $r = db_get("SELECT full_name AS name FROM investors WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+    elseif ($editDebitType === 'tenant') { $r = db_get("SELECT full_name AS name FROM tenants WHERE id=?", [$editDebitId]); $editDebitName = $r['name'] ?? ''; }
+}
+
 include '../includes/header.php';
 ?>
 
 <div class="d-flex align-items-center gap-2 mb-3">
     <a href="vouchers.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
-    <h5 class="mb-0"><?= $edit_id > 0 ? 'Edit Voucher' : 'New Voucher' ?></h5>
+    <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i><?= $edit_id > 0 ? 'Edit Journal Voucher' : 'New Journal Voucher' ?></h5>
 </div>
 
 <form method="post" id="voucherForm">
     <?= csrf_field() ?>
-    <div class="card">
+    <div class="card mb-3">
         <div class="card-header"><i class="bi bi-receipt me-2"></i>Voucher Details</div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Search Party <small class="text-muted">(Quick Add — Name / CNIC / Phone / Code)</small></label>
-                    <div class="position-relative">
-                        <input type="text" id="partySearch" class="form-control form-control-lg" placeholder="Type customer, vendor, employee name, CNIC..." autocomplete="off">
-                        <div id="searchResults" class="list-group position-absolute w-100" style="z-index:1050;display:none;max-height:350px;overflow-y:auto"></div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">&nbsp;</label>
-                    <div id="partyInfoMini" class="form-control-plaintext text-muted small" style="display:none">
-                        <span class="fw-bold" id="partyNameMini"></span>
-                        <span class="badge ms-1" id="partyTypeBadgeMini"></span>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">&nbsp;</label>
-                    <button type="button" class="btn btn-outline-success d-none" id="btnAddPartyLine"><i class="bi bi-plus-lg me-1"></i>Add Party Line</button>
-                </div>
-            </div>
-
-            <div class="row g-3 mt-0">
                 <div class="col-md-3">
                     <label class="form-label">Voucher No</label>
-                    <input type="text" name="voucher_no" class="form-control" placeholder="Auto" value="<?= e($record['voucher_no'] ?? '') ?>">
+                    <input type="text" name="voucher_no" class="form-control" placeholder="Auto (JV-xxxx)" value="<?= e($record['voucher_no'] ?? '') ?>">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Date</label>
+                    <label class="form-label">Voucher Date *</label>
                     <input type="date" name="voucher_date" class="form-control" value="<?= e($record['voucher_date'] ?? date('Y-m-d')) ?>" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Type</label>
-                    <select name="voucher_type" class="form-select">
-                        <option value="cash_payment" <?= ($record['voucher_type'] ?? '') === 'cash_payment' ? 'selected' : '' ?>>Cash Payment</option>
-                        <option value="cash_receipt" <?= ($record['voucher_type'] ?? '') === 'cash_receipt' ? 'selected' : '' ?>>Cash Receipt</option>
-                        <option value="bank_payment" <?= ($record['voucher_type'] ?? '') === 'bank_payment' ? 'selected' : '' ?>>Bank Payment</option>
-                        <option value="bank_receipt" <?= ($record['voucher_type'] ?? '') === 'bank_receipt' ? 'selected' : '' ?>>Bank Receipt</option>
-                        <option value="journal" <?= ($record['voucher_type'] ?? '') === 'journal' ? 'selected' : '' ?>>Journal</option>
-                    </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Project</label>
@@ -153,91 +181,99 @@ include '../includes/header.php';
                         <option value="draft" <?= ($record['status'] ?? '') === 'draft' ? 'selected' : '' ?>>Draft</option>
                     </select>
                 </div>
-                <div class="col-12">
-                    <label class="form-label">Narration</label>
-                    <input type="text" name="narration" class="form-control" value="<?= e($record['narration'] ?? '') ?>">
+                <div class="col-md-3">
+                    <label class="form-label">Reference No</label>
+                    <input type="text" name="reference_no" class="form-control" placeholder="Invoice / Txn ref" value="<?= e($record['reference_no'] ?? '') ?>">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Amount *</label>
+                    <input type="number" step="0.01" name="amount" class="form-control form-control-lg fw-bold" placeholder="0.00" value="<?= $edit_id > 0 ? e($editAmount) : '' ?>" required id="txnAmount">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Narration *</label>
+                    <input type="text" name="narration" class="form-control" placeholder="Brief description of the transaction" value="<?= e($record['narration'] ?? '') ?>" required>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Remarks</label>
+                    <input type="text" name="remarks" class="form-control" placeholder="Internal notes (optional)" value="<?= e($record['remarks'] ?? '') ?>">
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card mt-3">
-        <div class="card-header"><i class="bi bi-list-ol me-2"></i>Entries</div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table align-middle mb-0" id="linesTable">
-                    <thead>
-                    <tr>
-                        <th style="width:38%">Account</th>
-                        <th>Description</th>
-                        <th style="width:140px">Debit</th>
-                        <th style="width:140px">Credit</th>
-                        <th style="width:40px"></th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php $emptyRows = max(4, count($recordLines)); ?>
-                    <?php for ($i = 0; $i < $emptyRows; $i++): ?>
-                        <?php $line = $recordLines[$i] ?? null; ?>
-                        <tr>
-                            <td>
-                                <select name="account_id[]" class="form-select form-select-sm">
-                                    <option value="">Select Account</option>
-                                    <?php foreach ($accounts as $a): ?><option value="<?= $a['id'] ?>" <?= $line && (int)$line['account_id'] === (int)$a['id'] ? 'selected' : '' ?>><?= e($a['code']) ?> - <?= e($a['name']) ?></option><?php endforeach; ?>
-                                </select>
-                            </td>
-                            <td><input type="text" name="item_description[]" class="form-control form-control-sm" value="<?= e($line['item_description'] ?? '') ?>"></td>
-                            <td><input type="number" step="0.01" name="debit[]" class="form-control form-control-sm line-debit" value="<?= $line ? (float)$line['debit'] : 0 ?>" data-mask-money></td>
-                            <td><input type="number" step="0.01" name="credit[]" class="form-control form-control-sm line-credit" value="<?= $line ? (float)$line['credit'] : 0 ?>" data-mask-money></td>
-                            <td><button type="button" class="btn btn-sm btn-outline-danger btn-del-line"><i class="bi bi-x-lg"></i></button></td>
-                        </tr>
-                    <?php endfor; ?>
-                    </tbody>
-                    <tfoot>
-                    <tr>
-                        <td><button type="button" class="btn btn-sm btn-outline-primary" id="btnAddLine"><i class="bi bi-plus-lg me-1"></i>Add Line</button></td>
-                        <td class="text-end fw-bold">Totals</td>
-                        <td class="fw-bold" id="totDebit">0.00</td>
-                        <td class="fw-bold" id="totCredit">0.00</td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td colspan="5"><div class="alert alert-warning mb-0 py-1 small" id="diffAlert" style="display:none"><i class="bi bi-exclamation-triangle me-1"></i>Debit and credit totals must match.</div></td>
-                    </tr>
-                    </tfoot>
-                </table>
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card border-success h-100">
+                <div class="card-header bg-success text-white"><i class="bi bi-arrow-up-circle me-2"></i>Credit &mdash; Received From (Kis Sy Liya)</div>
+                <div class="card-body">
+                    <input type="hidden" name="credit_party_type" id="creditPartyType" value="<?= e($editCreditType) ?>">
+                    <input type="hidden" name="credit_party_id" id="creditPartyId" value="<?= $editCreditId ?>">
+                    <label class="form-label">Search Party</label>
+                    <div class="position-relative">
+                        <input type="text" id="creditSearch" class="form-control" placeholder="Type name, CNIC, phone..." autocomplete="off" value="<?= e($editCreditName) ?>">
+                        <div id="creditResults" class="list-group position-absolute w-100" style="z-index:1050;display:none;max-height:300px;overflow-y:auto"></div>
+                    </div>
+                    <div id="creditInfo" class="mt-2" style="display:<?= $editCreditId > 0 ? '' : 'none' ?>">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold" id="creditNameDisplay"><?= e($editCreditName) ?></span>
+                            <span class="badge bg-success" id="creditTypeBadge"></span>
+                        </div>
+                        <div class="mt-1">
+                            <span class="text-muted small">Outstanding Balance:</span>
+                            <span class="fs-5 fw-bold" id="creditBalanceDisplay">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-danger h-100">
+                <div class="card-header bg-danger text-white"><i class="bi bi-arrow-down-circle me-2"></i>Debit &mdash; Paid To (Kis Ko Diya)</div>
+                <div class="card-body">
+                    <input type="hidden" name="debit_party_type" id="debitPartyType" value="<?= e($editDebitType) ?>">
+                    <input type="hidden" name="debit_party_id" id="debitPartyId" value="<?= $editDebitId ?>">
+                    <label class="form-label">Search Party</label>
+                    <div class="position-relative">
+                        <input type="text" id="debitSearch" class="form-control" placeholder="Type name, CNIC, phone..." autocomplete="off" value="<?= e($editDebitName) ?>">
+                        <div id="debitResults" class="list-group position-absolute w-100" style="z-index:1050;display:none;max-height:300px;overflow-y:auto"></div>
+                    </div>
+                    <div id="debitInfo" class="mt-2" style="display:<?= $editDebitId > 0 ? '' : 'none' ?>">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold" id="debitNameDisplay"><?= e($editDebitName) ?></span>
+                            <span class="badge bg-danger" id="debitTypeBadge"></span>
+                        </div>
+                        <div class="mt-1">
+                            <span class="text-muted small">Outstanding Balance:</span>
+                            <span class="fs-5 fw-bold" id="debitBalanceDisplay">--</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="mt-3 d-flex gap-2">
-        <button class="btn btn-primary" type="submit" id="btnSave"><i class="bi bi-check-lg me-1"></i><?= $edit_id > 0 ? 'Update Voucher' : 'Save Voucher' ?></button>
+    <div id="previewCard" class="card mb-3" style="display:none">
+        <div class="card-header"><i class="bi bi-eye me-2"></i>Voucher Preview</div>
+        <div class="card-body">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Account</th><th class="text-end" style="width:150px">Debit</th><th class="text-end" style="width:150px">Credit</th></tr></thead>
+                <tbody>
+                    <tr><td id="previewDebitAccount"></td><td class="text-end fw-bold" id="previewDebitAmt"></td><td class="text-end">-</td></tr>
+                    <tr><td id="previewCreditAccount"></td><td class="text-end">-</td><td class="text-end fw-bold" id="previewCreditAmt"></td></tr>
+                </tbody>
+                <tfoot><tr class="table-light fw-bold"><td>Total</td><td class="text-end" id="previewTotDebit"></td><td class="text-end" id="previewTotCredit"></td></tr></tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit" id="btnSave"><i class="bi bi-check-lg me-1"></i><?= $edit_id > 0 ? 'Update Voucher' : 'Save & Post Voucher' ?></button>
         <a href="vouchers.php" class="btn btn-light">Cancel</a>
     </div>
 </form>
 
-<?php
-$accountOptions = '';
-foreach ($accounts as $a) {
-    $accountOptions .= '<option value="' . $a['id'] . '">' . h($a['code']) . ' - ' . h($a['name']) . '</option>';
-}
-?>
-
 <script>
 (function () {
-    var table = document.getElementById('linesTable');
-    var options = <?= json_encode($accountOptions) ?>;
-
-    var partySearch = document.getElementById('partySearch');
-    var searchResults = document.getElementById('searchResults');
-    var partyInfoMini = document.getElementById('partyInfoMini');
-    var partyNameMini = document.getElementById('partyNameMini');
-    var partyTypeBadgeMini = document.getElementById('partyTypeBadgeMini');
-    var btnAddPartyLine = document.getElementById('btnAddPartyLine');
-    var debounceTimer = null;
-    var selectedPartyAccountId = 0;
-    var selectedPartyName = '';
-
     var typeLabels = {
         customer: { label: 'Customer', cls: 'bg-primary' },
         vendor: { label: 'Vendor', cls: 'bg-success' },
@@ -249,131 +285,156 @@ foreach ($accounts as $a) {
         tenant: { label: 'Tenant', cls: 'bg-danger' }
     };
 
+    var creditSearch = document.getElementById('creditSearch');
+    var creditResults = document.getElementById('creditResults');
+    var creditPartyType = document.getElementById('creditPartyType');
+    var creditPartyId = document.getElementById('creditPartyId');
+    var creditInfo = document.getElementById('creditInfo');
+    var creditNameDisplay = document.getElementById('creditNameDisplay');
+    var creditTypeBadge = document.getElementById('creditTypeBadge');
+    var creditBalanceDisplay = document.getElementById('creditBalanceDisplay');
+
+    var debitSearch = document.getElementById('debitSearch');
+    var debitResults = document.getElementById('debitResults');
+    var debitPartyType = document.getElementById('debitPartyType');
+    var debitPartyId = document.getElementById('debitPartyId');
+    var debitInfo = document.getElementById('debitInfo');
+    var debitNameDisplay = document.getElementById('debitNameDisplay');
+    var debitTypeBadge = document.getElementById('debitTypeBadge');
+    var debitBalanceDisplay = document.getElementById('debitBalanceDisplay');
+
+    var previewCard = document.getElementById('previewCard');
+    var txnAmount = document.getElementById('txnAmount');
+    var btnSave = document.getElementById('btnSave');
+    var debounceTimers = {};
+
     function esc(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    function addRow(accountId, description) {
-        var tr = document.createElement('tr');
-        tr.innerHTML = '<td><select name="account_id[]" class="form-select form-select-sm"><option value="">Select Account</option>' + options + '</select></td>' +
-            '<td><input type="text" name="item_description[]" class="form-control form-control-sm" value="' + esc(description || '') + '"></td>' +
-            '<td><input type="number" step="0.01" name="debit[]" class="form-control form-control-sm line-debit" value="0"></td>' +
-            '<td><input type="number" step="0.01" name="credit[]" class="form-control form-control-sm line-credit" value="0"></td>' +
-            '<td><button type="button" class="btn btn-sm btn-outline-danger btn-del-line"><i class="bi bi-x-lg"></i></button></td>';
-        var sel = tr.querySelector('select');
-        if (accountId) sel.value = String(accountId);
-        table.tBodies[0].appendChild(tr);
-        bindRow(tr);
-        var amt = tr.querySelector('.line-debit');
-        if (amt) { amt.focus(); amt.select(); }
-        return tr;
-    }
+    function setupSearch(inputEl, resultsEl, typeInputEl, idInputEl, infoEl, nameEl, badgeEl, balanceEl, side) {
+        var timer = null;
+        inputEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
 
-    document.getElementById('btnAddLine').addEventListener('click', function () { addRow(0, ''); });
+        inputEl.addEventListener('input', function () {
+            clearTimeout(timer);
+            var q = inputEl.value.trim();
+            if (q.length < 2) { resultsEl.style.display = 'none'; return; }
+            timer = setTimeout(function () {
+                fetch('<?= BASE_URL ?>/pages/ajax.php?action=party_search&q=' + encodeURIComponent(q) + '&_t=' + Date.now())
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        resultsEl.innerHTML = '';
+                        if (!data || !Array.isArray(data) || data.length === 0) {
+                            resultsEl.innerHTML = '<div class="list-group-item text-muted">No results found</div>';
+                            resultsEl.style.display = 'block';
+                            return;
+                        }
+                        data.forEach(function (item) {
+                            var tl = typeLabels[item.type] || { label: item.type, cls: 'bg-secondary' };
+                            var detail = item.code ? item.code : '';
+                            if (item.cnic) detail += (detail ? ' | ' : '') + 'CNIC: ' + item.cnic;
+                            if (item.phone) detail += (detail ? ' | ' : '') + item.phone;
+                            var div = document.createElement('button');
+                            div.type = 'button';
+                            div.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                            div.innerHTML = '<div><div class="fw-medium">' + esc(item.name || '') + '</div>' +
+                                (detail ? '<div class="small text-muted">' + detail + '</div>' : '') + '</div>' +
+                                '<span class="badge ' + tl.cls + '">' + tl.label + '</span>';
+                            div.addEventListener('click', function () {
+                                inputEl.value = item.name || '';
+                                resultsEl.style.display = 'none';
+                                typeInputEl.value = item.type;
+                                idInputEl.value = item.id;
+                                nameEl.textContent = item.name || '';
+                                var tl2 = typeLabels[item.type] || { label: item.type, cls: 'bg-secondary' };
+                                badgeEl.textContent = tl2.label;
+                                badgeEl.className = 'badge ' + tl2.cls;
+                                infoEl.style.display = '';
+                                balanceEl.textContent = 'Loading...';
+                                balanceEl.className = 'fs-5 fw-bold';
+                                fetch('<?= BASE_URL ?>/pages/ajax.php?action=party_balance&type=' + item.type + '&id=' + item.id + '&_t=' + Date.now())
+                                    .then(function (r) { return r.json(); })
+                                    .then(function (b) {
+                                        var bal = parseFloat(b.balance) || 0;
+                                        var color = bal > 0 ? 'text-danger' : (bal < 0 ? 'text-success' : 'text-muted');
+                                        balanceEl.textContent = 'Rs. ' + bal.toFixed(2);
+                                        balanceEl.className = 'fs-5 fw-bold ' + color;
+                                    })
+                                    .catch(function () {
+                                        balanceEl.textContent = 'Error loading balance';
+                                        balanceEl.className = 'fs-5 fw-bold text-danger';
+                                    });
+                                updatePreview();
+                            });
+                            resultsEl.appendChild(div);
+                        });
+                        resultsEl.style.display = 'block';
+                    })
+                    .catch(function () {
+                        resultsEl.innerHTML = '<div class="list-group-item text-danger">Search failed</div>';
+                        resultsEl.style.display = 'block';
+                    });
+            }, 300);
+        });
 
-    table.addEventListener('click', function (e) {
-        if (e.target.closest('.btn-del-line')) {
-            var rows = table.tBodies[0].rows;
-            if (rows.length > 1) {
-                e.target.closest('tr').remove();
-                calc();
-            }
-        }
-    });
-
-    function bindRow(row) {
-        row.querySelectorAll('.line-debit, .line-credit').forEach(function (el) {
-            el.addEventListener('input', calc);
+        inputEl.addEventListener('focus', function () {
+            if (inputEl.value.trim().length >= 2) resultsEl.style.display = 'block';
         });
     }
-    table.tBodies[0].querySelectorAll('tr').forEach(function (row) { bindRow(row); });
 
-    btnAddPartyLine.addEventListener('click', function () {
-        if (!selectedPartyAccountId) return;
-        addRow(selectedPartyAccountId, selectedPartyName);
-    });
-
-    partySearch.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); }
-    });
-
-    partySearch.addEventListener('input', function () {
-        clearTimeout(debounceTimer);
-        var q = partySearch.value.trim();
-        if (q.length < 2) { searchResults.style.display = 'none'; return; }
-        debounceTimer = setTimeout(function () {
-            fetch('<?= BASE_URL ?>/pages/ajax.php?action=party_search&q=' + encodeURIComponent(q) + '&_t=' + Date.now())
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    searchResults.innerHTML = '';
-                    if (data && data.error) {
-                        searchResults.innerHTML = '<div class="list-group-item text-danger">' + data.error + '</div>';
-                        searchResults.style.display = 'block';
-                        return;
-                    }
-                    if (!data || !Array.isArray(data) || data.length === 0) {
-                        searchResults.innerHTML = '<div class="list-group-item text-muted">No results found</div>';
-                        searchResults.style.display = 'block';
-                        return;
-                    }
-                    data.forEach(function (item) {
-                        var tl = typeLabels[item.type] || { label: item.type, cls: 'bg-secondary' };
-                        var detail = item.code ? item.code : '';
-                        if (item.cnic) detail += (detail ? ' | ' : '') + 'CNIC: ' + item.cnic;
-                        if (item.phone) detail += (detail ? ' | ' : '') + item.phone;
-                        var div = document.createElement('button');
-                        div.type = 'button';
-                        div.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-                        div.innerHTML = '<div><div class="fw-medium">' + (item.name || '') + '</div>' +
-                            (detail ? '<div class="small text-muted">' + detail + '</div>' : '') + '</div>' +
-                            '<span class="badge ' + tl.cls + '">' + tl.label + '</span>';
-                        div.addEventListener('click', function () {
-                            partySearch.value = item.name || '';
-                            searchResults.style.display = 'none';
-                            selectedPartyAccountId = 0;
-                            selectedPartyName = item.name || '';
-                            partyNameMini.textContent = item.name || '';
-                            var tl2 = typeLabels[item.type] || { label: item.type, cls: 'bg-secondary' };
-                            partyTypeBadgeMini.textContent = tl2.label;
-                            partyTypeBadgeMini.className = 'badge ' + tl2.cls;
-                            partyInfoMini.style.display = '';
-                            btnAddPartyLine.classList.add('d-none');
-                            fetch('<?= BASE_URL ?>/pages/ajax.php?action=party_account&type=' + item.type + '&id=' + item.id + '&_t=' + Date.now())
-                                .then(function (r) { return r.json(); })
-                                .then(function (d) {
-                                    if (d && d.account_id) {
-                                        selectedPartyAccountId = d.account_id;
-                                        btnAddPartyLine.classList.remove('d-none');
-                                    }
-                                })
-                                .catch(function () {});
-                        });
-                        searchResults.appendChild(div);
-                    });
-                    searchResults.style.display = 'block';
-                })
-                .catch(function () {
-                    searchResults.innerHTML = '<div class="list-group-item text-danger">Search failed. Please try again.</div>';
-                    searchResults.style.display = 'block';
-                });
-        }, 300);
-    });
+    setupSearch(creditSearch, creditResults, creditPartyType, creditPartyId, creditInfo, creditNameDisplay, creditTypeBadge, creditBalanceDisplay, 'credit');
+    setupSearch(debitSearch, debitResults, debitPartyType, debitPartyId, debitInfo, debitNameDisplay, debitTypeBadge, debitBalanceDisplay, 'debit');
 
     document.addEventListener('click', function (e) {
-        if (!partySearch.contains(e.target) && !searchResults.contains(e.target)) {
-            searchResults.style.display = 'none';
-        }
+        if (!creditSearch.contains(e.target) && !creditResults.contains(e.target)) creditResults.style.display = 'none';
+        if (!debitSearch.contains(e.target) && !debitResults.contains(e.target)) debitResults.style.display = 'none';
     });
 
-    function calc() {
-        var d = 0, c = 0;
-        table.tBodies[0].querySelectorAll('.line-debit').forEach(function (el) { d += parseFloat(el.value) || 0; });
-        table.tBodies[0].querySelectorAll('.line-credit').forEach(function (el) { c += parseFloat(el.value) || 0; });
-        document.getElementById('totDebit').textContent = d.toFixed(2);
-        document.getElementById('totCredit').textContent = c.toFixed(2);
-        document.getElementById('diffAlert').style.display = Math.abs(d - c) > 0.01 ? 'block' : 'none';
+    function updatePreview() {
+        var amt = parseFloat(txnAmount.value) || 0;
+        var creditType = creditPartyType.value;
+        var creditId = creditPartyId.value;
+        var debitType = debitPartyType.value;
+        var debitId = debitPartyId.value;
+
+        if (creditId > 0 && debitId > 0 && amt > 0) {
+            previewCard.style.display = '';
+            document.getElementById('previewDebitAccount').textContent = debitSearch.value + ' (' + debitType + ')';
+            document.getElementById('previewCreditAccount').textContent = creditSearch.value + ' (' + creditType + ')';
+            document.getElementById('previewDebitAmt').textContent = 'Rs. ' + amt.toFixed(2);
+            document.getElementById('previewCreditAmt').textContent = 'Rs. ' + amt.toFixed(2);
+            document.getElementById('previewTotDebit').textContent = 'Rs. ' + amt.toFixed(2);
+            document.getElementById('previewTotCredit').textContent = 'Rs. ' + amt.toFixed(2);
+            btnSave.disabled = false;
+            btnSave.classList.remove('disabled');
+        } else {
+            previewCard.style.display = 'none';
+            if (creditId > 0 && debitId > 0 && amt > 0) {
+                btnSave.disabled = false;
+            } else {
+                btnSave.disabled = true;
+                btnSave.classList.add('disabled');
+            }
+        }
     }
-    calc();
+
+    txnAmount.addEventListener('input', updatePreview);
+
+    var origCreditId = creditPartyId.value;
+    var origDebitId = debitPartyId.value;
+    var origAmt = txnAmount.value;
+    if (origCreditId > 0 && origDebitId > 0 && parseFloat(origAmt) > 0) {
+        updatePreview();
+    } else {
+        btnSave.disabled = true;
+        btnSave.classList.add('disabled');
+    }
+
+    document.getElementById('voucherForm').addEventListener('submit', function () {
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Saving...';
+    });
 })();
 </script>
 

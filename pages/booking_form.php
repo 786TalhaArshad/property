@@ -166,9 +166,22 @@ if (is_post()) {
             }
         }
     } elseif ($action === 'cancel') {
-        db_exec("UPDATE bookings SET status = 'cancelled', updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$id]);
+        $bookId = (int)$id;
+        $linkedReceipts = db_all("SELECT * FROM receipts WHERE booking_id = ?", [$bookId]);
+        foreach ($linkedReceipts as $lr) {
+            if (!empty($lr['installment_id'])) {
+                db_exec("UPDATE installments SET paid_amount = 0, status = 'pending', paid_date = NULL, updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$lr['installment_id']]);
+            }
+            if (!empty($lr['voucher_id'])) {
+                db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$lr['voucher_id']]);
+                db_exec("DELETE FROM vouchers WHERE id = ?", [$lr['voucher_id']]);
+            }
+        }
+        db_exec("DELETE FROM receipts WHERE booking_id = ?", [$bookId]);
+        db_exec("DELETE FROM installments WHERE booking_id = ?", [$bookId]);
+        db_exec("UPDATE bookings SET status = 'cancelled', updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$bookId]);
         db_exec("UPDATE properties SET status = 'available', updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$record['property_id']]);
-        flash('success', 'Booking cancelled and property released.');
+        flash('success', 'Booking cancelled, all related entries removed, and property released.');
         redirect('bookings.php');
     }
 }

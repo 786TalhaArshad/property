@@ -11,11 +11,22 @@ if (is_post() && $canEdit) {
     $action = $_POST['action'] ?? '';
     if ($action === 'delete') {
         $pid = (int)($_POST['id'] ?? 0);
-        $purchase = db_get("SELECT voucher_id FROM purchases WHERE id = ?", [$pid]);
+        $purchase = db_get("SELECT voucher_id, payment_voucher_id FROM purchases WHERE id = ?", [$pid]);
         if ($purchase) {
+            $oldItems = db_all("SELECT product_id, quantity, unit_cost FROM purchase_items WHERE purchase_id = ?", [$pid]);
+            foreach ($oldItems as $oi) {
+                if ($oi['product_id']) stock_adjust($oi['product_id'], 'issue', (float)$oi['quantity'], (float)$oi['unit_cost'], 'purchase', $pid);
+            }
             if ($purchase['voucher_id']) {
                 db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$purchase['voucher_id']]);
                 db_exec("DELETE FROM vouchers WHERE id = ?", [$purchase['voucher_id']]);
+            }
+            if ($purchase['payment_voucher_id']) {
+                $pvId = (int)$purchase['payment_voucher_id'];
+                $linkedVendorPay = db_get("SELECT id FROM vendor_payments WHERE voucher_id = ?", [$pvId]);
+                if ($linkedVendorPay) db_exec("DELETE FROM vendor_payments WHERE id = ?", [$linkedVendorPay['id']]);
+                db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$pvId]);
+                db_exec("DELETE FROM vouchers WHERE id = ?", [$pvId]);
             }
             db_exec("DELETE FROM purchase_items WHERE purchase_id = ?", [$pid]);
             db_exec("DELETE FROM purchases WHERE id = ?", [$pid]);

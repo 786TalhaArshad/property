@@ -26,15 +26,18 @@ if (is_post() && $canEdit) {
         $nominee_name = trim($_POST['nominee_name'] ?? '');
         $nominee_cnic = trim($_POST['nominee_cnic'] ?? '');
         $nominee_relation = trim($_POST['nominee_relation'] ?? '');
+        $opening_balance = (float)($_POST['opening_balance'] ?? 0);
+        $balance_type = trim($_POST['balance_type'] ?? 'receivable');
+        if (!in_array($balance_type, ['receivable', 'payable'])) $balance_type = 'receivable';
         $status = (int)($_POST['status'] ?? 1);
 
         if ($full_name === '') {
             flash('danger', 'Customer name is required.');
         } elseif ($id > 0) {
-            db_exec("UPDATE customers SET customer_no=?, full_name=?, cnic=?, passport_no=?, phone=?, whatsapp=?, email=?, address=?, city_id=?, nominee_name=?, nominee_cnic=?, nominee_relation=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$customer_no, $full_name, $cnic, $passport_no, $phone, $whatsapp, $email, $address, $city_id, $nominee_name, $nominee_cnic, $nominee_relation, $status, $id]);
+            db_exec("UPDATE customers SET customer_no=?, full_name=?, cnic=?, passport_no=?, phone=?, whatsapp=?, email=?, address=?, city_id=?, nominee_name=?, nominee_cnic=?, nominee_relation=?, opening_balance=?, balance_type=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$customer_no, $full_name, $cnic, $passport_no, $phone, $whatsapp, $email, $address, $city_id, $nominee_name, $nominee_cnic, $nominee_relation, $opening_balance, $balance_type, $status, $id]);
             flash('success', 'Customer updated successfully.');
         } else {
-            db_exec("INSERT INTO customers (customer_no, full_name, cnic, passport_no, phone, whatsapp, email, address, city_id, nominee_name, nominee_cnic, nominee_relation, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$customer_no, $full_name, $cnic, $passport_no, $phone, $whatsapp, $email, $address, $city_id, $nominee_name, $nominee_cnic, $nominee_relation, $status]);
+            db_exec("INSERT INTO customers (customer_no, full_name, cnic, passport_no, phone, whatsapp, email, address, city_id, nominee_name, nominee_cnic, nominee_relation, opening_balance, balance_type, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$customer_no, $full_name, $cnic, $passport_no, $phone, $whatsapp, $email, $address, $city_id, $nominee_name, $nominee_cnic, $nominee_relation, $opening_balance, $balance_type, $status]);
             flash('success', 'Customer added successfully.');
         }
     } elseif ($action === 'delete') {
@@ -87,7 +90,7 @@ include '../includes/header.php';
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-info" href="customer_view.php?id=<?= $r['id'] ?>"><i class="bi bi-eye"></i></a>
                             <?php if ($canEdit): ?>
-                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#recordModal" data-edit='<?= h(json_encode(['id' => $r['id'], 'customer_no' => $r['customer_no'], 'full_name' => $r['full_name'], 'cnic' => $r['cnic'], 'passport_no' => $r['passport_no'], 'phone' => $r['phone'], 'whatsapp' => $r['whatsapp'], 'email' => $r['email'], 'address' => $r['address'], 'city_id' => $r['city_id'], 'nominee_name' => $r['nominee_name'], 'nominee_cnic' => $r['nominee_cnic'], 'nominee_relation' => $r['nominee_relation'], 'status' => $r['status']])) ?>'><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#recordModal" data-edit='<?= h(json_encode(['id' => $r['id'], 'customer_no' => $r['customer_no'], 'full_name' => $r['full_name'], 'cnic' => $r['cnic'], 'passport_no' => $r['passport_no'], 'phone' => $r['phone'], 'whatsapp' => $r['whatsapp'], 'email' => $r['email'], 'address' => $r['address'], 'city_id' => $r['city_id'], 'nominee_name' => $r['nominee_name'], 'nominee_cnic' => $r['nominee_cnic'], 'nominee_relation' => $r['nominee_relation'], 'opening_balance' => $r['opening_balance'], 'balance_type' => $r['balance_type'], 'status' => $r['status']])) ?>'><i class="bi bi-pencil"></i></button>
                             <form method="post" class="d-inline" data-confirm="Delete this customer? This cannot be undone.">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete">
@@ -174,6 +177,17 @@ include '../includes/header.php';
                             <select name="status" class="form-select">
                                 <option value="1">Active</option>
                                 <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Opening Balance</label>
+                            <input type="number" step="0.01" name="opening_balance" class="form-control" placeholder="0.00" value="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Balance Type</label>
+                            <select name="balance_type" class="form-select">
+                                <option value="receivable">Receivable (Customer owes us)</option>
+                                <option value="payable">Payable (We owe customer)</option>
                             </select>
                         </div>
                     </div>

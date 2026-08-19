@@ -10,7 +10,54 @@ if (is_post() && $canEdit) {
     csrf_check();
     $action = $_POST['action'] ?? '';
     if ($action === 'delete_voucher') {
-        db_exec("DELETE FROM vouchers WHERE id=?", [(int)($_POST['id'] ?? 0)]);
+        $delId = (int)($_POST['id'] ?? 0);
+        $linkedReceipt = db_get("SELECT * FROM receipts WHERE voucher_id = ?", [$delId]);
+        if ($linkedReceipt) {
+            if (!empty($linkedReceipt['installment_id'])) {
+                $inst = db_get("SELECT * FROM installments WHERE id = ?", [$linkedReceipt['installment_id']]);
+                if ($inst) {
+                    $newPaid = max(0, (float)$inst['paid_amount'] - (float)$linkedReceipt['amount']);
+                    $newStatus = $newPaid >= (float)$inst['amount'] ? 'paid' : ($newPaid > 0 ? 'partial' : 'pending');
+                    db_exec("UPDATE installments SET paid_amount = ?, status = ?, paid_date = NULL, updated_date=CURDATE(), updated_time=CURTIME() WHERE id = ?", [$newPaid, $newStatus, $linkedReceipt['installment_id']]);
+                }
+            }
+            db_exec("DELETE FROM receipts WHERE id = ?", [$linkedReceipt['id']]);
+        }
+        $linkedCustPay = db_get("SELECT id FROM customer_payments WHERE voucher_id = ?", [$delId]);
+        if ($linkedCustPay) db_exec("DELETE FROM customer_payments WHERE id = ?", [$linkedCustPay['id']]);
+        $linkedVendorPay = db_get("SELECT id FROM vendor_payments WHERE voucher_id = ?", [$delId]);
+        if ($linkedVendorPay) db_exec("DELETE FROM vendor_payments WHERE id = ?", [$linkedVendorPay['id']]);
+        $linkedDealerPay = db_get("SELECT id FROM dealer_payments WHERE voucher_id = ?", [$delId]);
+        if ($linkedDealerPay) db_exec("DELETE FROM dealer_payments WHERE id = ?", [$linkedDealerPay['id']]);
+        $linkedOwnerSettlement = db_get("SELECT id, owner_id FROM owner_settlements WHERE voucher_id = ?", [$delId]);
+        if ($linkedOwnerSettlement) {
+            db_exec("DELETE FROM owner_settlements WHERE id = ?", [$linkedOwnerSettlement['id']]);
+            $osOwner = (int)$linkedOwnerSettlement['owner_id'];
+            if ($osOwner) db_exec("DELETE FROM owner_ledger WHERE owner_id = ? AND description = 'Payment to owner' AND voucher_id = ?", [$osOwner, $delId]);
+        }
+        $linkedInvestorLedger = db_get("SELECT id FROM investor_ledger WHERE voucher_id = ?", [$delId]);
+        if ($linkedInvestorLedger) db_exec("DELETE FROM investor_ledger WHERE id = ?", [$linkedInvestorLedger['id']]);
+        $linkedRentCollection = db_get("SELECT id, schedule_id FROM rent_collections WHERE voucher_id = ?", [$delId]);
+        if ($linkedRentCollection) {
+            db_exec("DELETE FROM rent_collections WHERE id = ?", [$linkedRentCollection['id']]);
+            if (!empty($linkedRentCollection['schedule_id'])) {
+                $schedId = (int)$linkedRentCollection['schedule_id'];
+                $agg = db_get("SELECT COALESCE(SUM(amount),0) amt FROM rent_collections WHERE schedule_id = ?", [$schedId]);
+                $sched = db_get("SELECT rent_amount, late_charges FROM rent_schedule WHERE id = ?", [$schedId]);
+                if ($sched && $agg) {
+                    $total = (float)$sched['rent_amount'] + (float)$sched['late_charges'];
+                    $paid = (float)$agg['amt'];
+                    $st = $total > 0 && $paid >= $total ? 'paid' : ($paid > 0 ? 'partial' : 'pending');
+                    db_exec("UPDATE rent_schedule SET paid_amount=?, status=?, paid_date=NULL, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$paid, $st, $schedId]);
+                }
+            }
+        }
+        $linkedEmpEntry = db_get("SELECT id FROM employee_entries WHERE voucher_id = ?", [$delId]);
+        if ($linkedEmpEntry) db_exec("DELETE FROM employee_entries WHERE id = ?", [$linkedEmpEntry['id']]);
+        $linkedConEntry = db_get("SELECT id FROM contractor_entries WHERE voucher_id = ?", [$delId]);
+        if ($linkedConEntry) db_exec("DELETE FROM contractor_entries WHERE id = ?", [$linkedConEntry['id']]);
+        db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$delId]);
+        db_exec("DELETE FROM vouchers WHERE id=?", [$delId]);
         flash('success', 'Voucher deleted.');
         redirect('roznamcha.php');
     } elseif ($action === 'delete_receipt') {
@@ -25,9 +72,12 @@ if (is_post() && $canEdit) {
             }
         }
         if ($rec && !empty($rec['voucher_id'])) {
+            db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$rec['voucher_id']]);
             db_exec("DELETE FROM vouchers WHERE id = ?", [$rec['voucher_id']]);
         }
-        db_exec("DELETE FROM receipts WHERE id = ?", [$rid]);
+        if ($rec && !empty($rec['id'])) {
+            db_exec("DELETE FROM receipts WHERE id = ?", [$rid]);
+        }
         flash('success', 'Receipt deleted.');
         redirect('roznamcha.php');
     } elseif ($action === 'delete_transfer') {
@@ -35,6 +85,7 @@ if (is_post() && $canEdit) {
         $rec = db_get("SELECT * FROM transfers WHERE id = ?", [$tid]);
         if ($rec && $rec['transfer_type'] !== 'customer_withdraw') {
             if ($rec['voucher_id']) {
+                db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$rec['voucher_id']]);
                 db_exec("DELETE FROM vouchers WHERE id = ?", [$rec['voucher_id']]);
             }
             db_exec("DELETE FROM transfers WHERE id = ?", [$tid]);

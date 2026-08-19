@@ -13,15 +13,6 @@ if (!$investor) {
     redirect('investors.php');
 }
 
-$ledger = db_all("SELECT * FROM investor_ledger WHERE investor_id = ? ORDER BY entry_date, id", [$id]);
-$totalCredit = 0;
-$totalDebit = 0;
-foreach ($ledger as $l) {
-    $totalCredit += (float)$l['credit'];
-    $totalDebit += (float)$l['debit'];
-}
-$balance = $totalCredit - $totalDebit;
-
 if (is_post() && $canManage) {
     csrf_check();
     $action = $_POST['action'] ?? '';
@@ -46,10 +37,45 @@ if (is_post() && $canManage) {
         redirect('investor_view.php?id=' . $id);
     } elseif ($action === 'delete_entry') {
         $entryId = (int)($_POST['entry_id'] ?? 0);
-        db_exec("DELETE FROM investor_ledger WHERE id = ? AND investor_id = ?", [$entryId, $id]);
-        flash('success', 'Ledger entry deleted.');
+        $delEntry = db_get("SELECT * FROM investor_ledger WHERE id = ? AND investor_id = ?", [$entryId, $id]);
+        if ($delEntry) {
+            db_exec("DELETE FROM investor_ledger WHERE id = ?", [$entryId]);
+            $allRows = db_all("SELECT id, debit, credit FROM investor_ledger WHERE investor_id = ? ORDER BY entry_date, id", [$id]);
+            $runningBal = 0.0;
+            foreach ($allRows as $row) {
+                $runningBal += (float)$row['credit'] - (float)$row['debit'];
+                db_exec("UPDATE investor_ledger SET balance = ? WHERE id = ?", [$runningBal, $row['id']]);
+            }
+            flash('success', 'Ledger entry deleted and balances recalculated.');
+        }
         redirect('investor_view.php?id=' . $id);
     }
+}
+
+$ledgerStart = trim($_GET['start_date'] ?? '');
+$ledgerEnd = trim($_GET['end_date'] ?? '');
+
+$allLedger = db_all("SELECT * FROM investor_ledger WHERE investor_id = ? ORDER BY entry_date, id", [$id]);
+
+$filteredLedger = [];
+foreach ($allLedger as $l) {
+    if ($ledgerStart !== '' && $l['entry_date'] < $ledgerStart) continue;
+    if ($ledgerEnd !== '' && $l['entry_date'] > $ledgerEnd) continue;
+    $filteredLedger[] = $l;
+}
+
+$totalCredit = 0;
+$totalDebit = 0;
+foreach ($filteredLedger as $l) {
+    $totalCredit += (float)$l['credit'];
+    $totalDebit += (float)$l['debit'];
+}
+$balance = $totalCredit - $totalDebit;
+
+$openingBalance = 0.0;
+if ($ledgerStart !== '') {
+    $ob = db_get("SELECT COALESCE(MAX(balance),0) b FROM investor_ledger WHERE investor_id = ? AND entry_date < ?", [$id, $ledgerStart]);
+    $openingBalance = (float)$ob['b'];
 }
 
 include '../includes/header.php';
@@ -71,7 +97,7 @@ include '../includes/header.php';
 
 <ul class="nav nav-pills mb-3">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#iProfile">Profile</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#iLedger">Ledger (<?= count($ledger) ?>)</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#iLedger">Ledger (<?= count($allLedger) ?>)</button></li>
 </ul>
 
 <div class="tab-content">
@@ -131,14 +157,31 @@ include '../includes/header.php';
         <?php endif; ?>
 
         <div class="card">
-            <div class="card-body p-0">
+            <div class="card-body">
+                <form method="get" action="investor_view.php#iLedger" class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <input type="hidden" name="id" value="<?= $id ?>">
+                    <div class="input-group input-group-sm" style="max-width:170px">
+                        <span class="input-group-text"><i class="bi bi-calendar"></i></span>
+                        <input type="date" name="start_date" class="form-control" value="<?= e($ledgerStart) ?>">
+                    </div>
+                    <div class="input-group input-group-sm" style="max-width:170px">
+                        <span class="input-group-text"><i class="bi bi-calendar"></i></span>
+                        <input type="date" name="end_date" class="form-control" value="<?= e($ledgerEnd) ?>">
+                    </div>
+                    <button class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+                    <a href="investor_view.php?id=<?= $id ?>#iLedger" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+                    <a href="investor_ledger_print.php?id=<?= $id ?>&start_date=<?= e($ledgerStart) ?>&end_date=<?= e($ledgerEnd) ?>" class="btn btn-outline-secondary btn-sm ms-auto" target="_blank"><i class="bi bi-printer me-1"></i> Print</a>
+                </form>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
-                        <thead><tr><th>Date</th><th>Description</th><th>Credit</th><th>Debit</th><th>Balance</th><?php if ($canManage): ?><th class="text-end">Action</th><?php endif; ?></tr></thead>
+                        <thead><tr><th>Date</th><th>Description</th><th>Credit (In)</th><th>Debit (Out)</th><th>Balance</th><?php if ($canManage): ?><th class="text-end">Action</th><?php endif; ?></tr></thead>
                         <tbody>
                         <?php
-                        $bal = 0;
-                        foreach ($ledger as $l):
+                        $bal = $openingBalance;
+                        if ($ledgerStart !== '' || $ledgerEnd !== '') {
+                            echo '<tr><td>' . fmt_date($ledgerStart) . '</td><td>Opening Balance</td><td>-</td><td>-</td><td>' . fmt_money($bal) . '</td>' . ($canManage ? '<td></td>' : '') . '</tr>';
+                        }
+                        foreach ($filteredLedger as $l):
                             $bal += (float)$l['credit'] - (float)$l['debit'];
                         ?>
                             <tr>
@@ -159,14 +202,16 @@ include '../includes/header.php';
                                 <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if (!$ledger): ?>
+                        <?php if (!$filteredLedger && $ledgerStart === '' && $ledgerEnd === ''): ?>
                             <tr><td colspan="<?= $canManage ? 6 : 5 ?>" class="text-center text-muted py-4">No ledger entries yet</td></tr>
+                        <?php elseif (!$filteredLedger): ?>
+                            <tr><td colspan="<?= $canManage ? 6 : 5 ?>" class="text-center text-muted py-4">No entries in this date range</td></tr>
                         <?php endif; ?>
                         </tbody>
                         <tfoot>
                         <tr class="table-light">
-                            <td colspan="3" class="text-end fw-bold">Net Balance</td>
-                            <td class="fw-bold <?= $balance > 0 ? 'text-success' : ($balance < 0 ? 'text-danger' : '') ?>" colspan="<?= $canManage ? 2 : 1 ?>"><?= fmt_money($balance) ?></td>
+                            <td colspan="<?= ($ledgerStart !== '' || $ledgerEnd !== '') ? 4 : 3 ?>" class="text-end fw-bold"><?= ($ledgerStart !== '' || $ledgerEnd !== '') ? 'Closing Balance' : 'Net Balance' ?></td>
+                            <td class="fw-bold <?= $balance > 0 ? 'text-success' : ($balance < 0 ? 'text-danger' : '') ?>" colspan="<?= $canManage ? 2 : 1 ?>"><?= fmt_money($bal) ?></td>
                         </tr>
                         </tfoot>
                     </table>
@@ -175,5 +220,13 @@ include '../includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+$(function () {
+    if (location.hash) {
+        $('.nav-pills .nav-link[data-bs-target="' + location.hash.replace(/[^a-zA-Z0-9_#]/g, '') + '"]').tab('show');
+    }
+});
+</script>
 
 <?php include '../includes/footer.php'; ?>

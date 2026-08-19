@@ -288,6 +288,26 @@ function status_badge($status) {
     return '<span class="badge bg-' . $cls . '">' . h(ucfirst(str_replace('_', ' ', $status))) . '</span>';
 }
 
+function stock_adjust($productId, $type, $qty, $unitCost, $refType = null, $refId = null, $projectId = null, $contractorId = null) {
+    $product = db_get("SELECT stock_qty, avg_cost FROM products WHERE id = ?", [$productId]);
+    if (!$product) return;
+    $oldStock = (float)$product['stock_qty'];
+    $oldAvg = (float)$product['avg_cost'];
+    if ($type === 'purchase') {
+        $totalCost = round($qty * $unitCost, 2);
+        $newTotal = ($oldStock * $oldAvg) + $totalCost;
+        $newStock = $oldStock + $qty;
+        $newAvg = $newStock > 0 ? round($newTotal / $newStock, 2) : 0;
+        db_exec("UPDATE products SET stock_qty = ?, avg_cost = ? WHERE id = ?", [$newStock, $newAvg, $productId]);
+    } elseif ($type === 'issue') {
+        $newStock = $oldStock - $qty;
+        if ($newStock < 0) $newStock = 0;
+        db_exec("UPDATE products SET stock_qty = ? WHERE id = ?", [$newStock, $productId]);
+    }
+    db_exec("INSERT INTO stock_movements (product_id, movement_type, quantity, unit_cost, total_cost, reference_type, reference_id, project_id, contractor_id, created_date, created_time) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME())",
+        [$productId, $type, $type === 'issue' ? -$qty : $qty, $unitCost, round(abs($qty) * $unitCost, 2), $refType, $refId, $projectId, $contractorId]);
+}
+
 function paginate_link($page, $extra = '') {
     $url = $_SERVER['PHP_SELF'];
     $sep = strpos($url, '?') !== false ? '&' : '?';

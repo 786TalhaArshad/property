@@ -8,7 +8,7 @@
   total_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
   discount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
   paid_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
-  payment_mode ENUM('cash','bank') NOT NULL DEFAULT 'cash',
+  payment_mode ENUM('cash','bank','credit') NOT NULL DEFAULT 'cash',
   bank_id INT UNSIGNED DEFAULT NULL,
   reference VARCHAR(80) DEFAULT NULL,
   voucher_id INT UNSIGNED DEFAULT NULL,

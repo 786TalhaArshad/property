@@ -60,11 +60,6 @@ if ($property_id > 0 && !in_array($property_id, $custPropertyIds)) {
 $docs = db_all("SELECT d.*, dt.name AS doc_type FROM documents d LEFT JOIN document_types dt ON dt.id = d.document_type_id WHERE d.related_type = 'customer' AND d.related_id = ? ORDER BY d.id DESC", [$id]);
 $docTypes = db_all("SELECT * FROM document_types ORDER BY name");
 
-$totalBooked = 0.0;
-$totalPaid = 0.0;
-foreach ($bookings as $b) {
-    $totalBooked += (float)$b['total_price'] - (float)$b['discount'];
-}
 $paidRows = db_all("SELECT r.receipt_date, r.receipt_no, r.amount, r.project_id,
                     COALESCE(pr.project_id, r.project_id, 0) AS eff_project_id,
                     COALESCE(b.property_id, 0) AS booking_property_id,
@@ -75,9 +70,13 @@ $paidRows = db_all("SELECT r.receipt_date, r.receipt_no, r.amount, r.project_id,
                     LEFT JOIN projects pj ON pj.id = COALESCE(pr.project_id, r.project_id)
                     WHERE r.customer_id = ?
                     ORDER BY r.receipt_date, r.id", [$id]);
-foreach ($paidRows as $pr) {
-    $totalPaid += (float)$pr['amount'];
-}
+$custPayRows = db_all("SELECT cp.payment_date, cp.amount, cp.narration, cp.bank_id, cp.project_id,
+                       COALESCE(cp.project_id, 0) AS eff_project_id,
+                       bk.name AS bank_name
+                       FROM customer_payments cp
+                       LEFT JOIN banks bk ON bk.id = cp.bank_id
+                       WHERE cp.customer_id = ?
+                       ORDER BY cp.payment_date, cp.id", [$id]);
 $transfers = db_all("SELECT t.*, fc.full_name AS from_name, tc.full_name AS to_name,
                      COALESCE(pr.project_id, t.project_id, 0) AS eff_project_id,
                      COALESCE(b.property_id, 0) AS booking_property_id,
@@ -90,11 +89,6 @@ $transfers = db_all("SELECT t.*, fc.full_name AS from_name, tc.full_name AS to_n
                      LEFT JOIN projects pj ON pj.id = COALESCE(pr.project_id, t.project_id)
                      WHERE t.transfer_type = 'customer_to_customer' AND (t.from_customer_id = ? OR t.to_customer_id = ?)
                      ORDER BY t.transfer_date, t.id", [$id, $id]);
-$outstanding = $totalBooked - $totalPaid;
-foreach ($transfers as $t) {
-    if ($t['to_customer_id'] == $id) $outstanding += (float)$t['amount'];
-    if ($t['from_customer_id'] == $id) $outstanding -= (float)$t['amount'];
-}
 
 $ledBookings = [];
 foreach ($bookings as $b) {
@@ -120,7 +114,19 @@ foreach ($transfers as $t) {
     if ($property_id > 0 && (int)$t['booking_property_id'] !== $property_id) continue;
     $ledTransfers[] = $t;
 }
+$ledCustPayments = [];
+foreach ($custPayRows as $cp) {
+    if ($ledgerStart !== '' && $cp['payment_date'] < $ledgerStart) continue;
+    if ($ledgerEnd !== '' && $cp['payment_date'] > $ledgerEnd) continue;
+    if ($project_id > 0 && (int)$cp['eff_project_id'] !== $project_id) continue;
+    $ledCustPayments[] = $cp;
+}
 $openingBalance = 0.0;
+$storedOB = (float)$cust['opening_balance'];
+if (($cust['balance_type'] ?? 'receivable') === 'payable') {
+    $storedOB = -$storedOB;
+}
+$openingBalance = $storedOB;
 if ($ledgerStart !== '') {
     $ob = (float)db_get("SELECT COALESCE(SUM(b.total_price - b.discount),0) amt FROM bookings b
                          JOIN properties pr ON pr.id = b.property_id
@@ -142,7 +148,29 @@ if ($ledgerStart !== '') {
                   AND (? = 0 OR COALESCE(pr.project_id, t.project_id) = ?)
                   AND (? = 0 OR COALESCE(b.property_id, 0) = ?)",
         [$id, $id, $id, $id, $ledgerStart, $project_id, $project_id, $property_id, $property_id]);
-    $openingBalance = $ob - $op + (float)$ot['amt'];
+    $ocp = (float)db_get("SELECT COALESCE(SUM(cp.amount),0) amt FROM customer_payments cp
+                          WHERE cp.customer_id = ? AND cp.payment_date < ?
+                          AND (? = 0 OR cp.project_id = ?)",
+        [$id, $ledgerStart, $project_id, $project_id])['amt'];
+    $openingBalance = $storedOB + $ob - $op - $ocp + (float)$ot['amt'];
+}
+
+$totalBooked = 0.0;
+$totalPaid = 0.0;
+$totalCustPaid = 0.0;
+foreach ($ledBookings as $b) {
+    $totalBooked += (float)$b['total_price'] - (float)$b['discount'];
+}
+foreach ($ledPayments as $pr) {
+    $totalPaid += (float)$pr['amount'];
+}
+foreach ($ledCustPayments as $cp) {
+    $totalCustPaid += (float)$cp['amount'];
+}
+$outstanding = $openingBalance + $totalBooked - $totalPaid - $totalCustPaid;
+foreach ($ledTransfers as $t) {
+    if ($t['to_customer_id'] == $id) $outstanding += (float)$t['amount'];
+    if ($t['from_customer_id'] == $id) $outstanding -= (float)$t['amount'];
 }
 
 include '../includes/header.php';
@@ -187,6 +215,14 @@ include '../includes/header.php';
                     <div class="col-md-3"><div class="text-muted small">Address</div><div class="fw-medium"><?= e($cust['address'] ?? '-') ?></div></div>
                     <div class="col-md-4"><div class="text-muted small">Nominee</div><div class="fw-medium"><?= e($cust['nominee_name'] ?? '-') ?> <?= $cust['nominee_relation'] ? '(' . e($cust['nominee_relation']) . ')' : '' ?></div></div>
                     <div class="col-md-4"><div class="text-muted small">Nominee CNIC</div><div class="fw-medium"><?= e($cust['nominee_cnic'] ?? '-') ?></div></div>
+                    <div class="col-md-4">
+                        <div class="text-muted small">Opening Balance</div>
+                        <div class="fw-medium"><?= fmt_money($cust['opening_balance']) ?></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-muted small">Balance Type</div>
+                        <div class="fw-medium"><?= ($cust['balance_type'] ?? 'receivable') === 'receivable' ? '<span class="badge bg-danger">Receivable (Customer owes us)</span>' : '<span class="badge bg-success">Payable (We owe customer)</span>' ?></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -278,8 +314,9 @@ include '../includes/header.php';
                         <tbody>
                         <?php
                         $balance = $openingBalance;
-                        if ($ledgerStart !== '' || $ledgerEnd !== '') {
-                            echo '<tr><td>' . fmt_date($ledgerStart) . '</td><td>Opening Balance</td><td>-</td><td>-</td><td>-</td><td>' . fmt_money($balance) . '</td></tr>';
+                        if ($openingBalance != 0) {
+                            $obLabel = ($ledgerStart !== '') ? 'Opening Balance (' . fmt_date($ledgerStart) . ')' : 'Opening Balance';
+                            echo '<tr class="table-light"><td>' . $obLabel . '</td><td colspan="2" class="small text-muted">' . e($cust['full_name']) . ' — ' . (($cust['balance_type'] ?? 'receivable') === 'receivable' ? 'Receivable (owed to us)' : 'Payable (we owe)') . '</td><td>' . ($openingBalance > 0 ? fmt_money($openingBalance) : '-') . '</td><td>' . ($openingBalance < 0 ? fmt_money(abs($openingBalance)) : '-') . '</td><td class="fw-bold">' . fmt_money($openingBalance) . '</td></tr>';
                         }
                         foreach ($ledBookings as $b) {
                             $balance += (float)$b['total_price'] - (float)$b['discount'];
@@ -298,7 +335,14 @@ include '../includes/header.php';
                             $balance -= (float)$pr['amount'];
                             echo '<tr><td>' . fmt_date($pr['receipt_date']) . '</td><td>Payment ' . e($pr['receipt_no']) . '</td><td>' . e($pr['project_name'] ?? '-') . '</td><td>-</td><td>' . fmt_money((float)$pr['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
                         }
-                        if (!$ledBookings && !$ledTransfers && !$ledPayments && $ledgerStart === '' && $ledgerEnd === '') {
+                        foreach ($ledCustPayments as $cp) {
+                            $balance -= (float)$cp['amount'];
+                            $desc = 'Paid to customer';
+                            if ($cp['narration']) $desc .= ' - ' . e($cp['narration']);
+                            if ($cp['bank_name']) $desc .= ' (' . e($cp['bank_name']) . ')';
+                            echo '<tr><td>' . fmt_date($cp['payment_date']) . '</td><td>' . $desc . '</td><td>-</td><td>-</td><td>' . fmt_money((float)$cp['amount']) . '</td><td>' . fmt_money($balance) . '</td></tr>';
+                        }
+                        if (!$ledBookings && !$ledTransfers && !$ledPayments && !$ledCustPayments && $ledgerStart === '' && $ledgerEnd === '') {
                             echo '<tr><td colspan="6" class="text-center text-muted py-4">No ledger entries yet</td></tr>';
                         }
                         ?>

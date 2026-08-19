@@ -102,6 +102,12 @@ $streets = db_all("SELECT s.*, b.name AS block_name FROM streets s LEFT JOIN blo
 $images = db_all("SELECT * FROM project_images WHERE project_id = ? ORDER BY id DESC", [$id]);
 $docs = db_all("SELECT * FROM project_documents WHERE project_id = ? ORDER BY id DESC", [$id]);
 
+$materialCost = (float)db_get("SELECT COALESCE(SUM(mi.total_amount),0) amt FROM material_issues mi WHERE mi.project_id = ?", [$id])['amt'];
+$contractorPayable = (float)db_get("SELECT COALESCE(SUM(ce.amount),0) amt FROM contractor_entries ce WHERE ce.project_id = ? AND ce.entry_type = 'payable'", [$id])['amt'];
+$contractorPaid = (float)db_get("SELECT COALESCE(SUM(ce.amount),0) amt FROM contractor_entries ce WHERE ce.project_id = ? AND ce.entry_type = 'paid'", [$id])['amt'];
+$totalInvestment = $materialCost + $contractorPaid;
+$recentIssues = db_all("SELECT mi.*, c.full_name AS contractor_name FROM material_issues mi LEFT JOIN contractors c ON c.id = mi.contractor_id WHERE mi.project_id = ? ORDER BY mi.issue_date DESC, mi.id DESC LIMIT 10", [$id]);
+
 include '../includes/header.php';
 ?>
 
@@ -126,6 +132,7 @@ include '../includes/header.php';
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabStreets">Streets</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabImages">Images</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDocs">Documents</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCosting">Costing</button></li>
 </ul>
 
 <div class="tab-content">
@@ -358,6 +365,41 @@ include '../includes/header.php';
                 </div>
             </div>
         </div>
+    </div>
+
+    <div class="tab-pane fade" id="tabCosting">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3"><div class="card stat-card bg-grad-blue"><div class="stat-body"><div class="stat-icon"><i class="bi bi-box-seam"></i></div><div><div class="stat-label">MATERIAL COST</div><div class="stat-value"><?= fmt_money($materialCost) ?></div></div></div></div></div>
+            <div class="col-md-3"><div class="card stat-card bg-grad-orange"><div class="stat-body"><div class="stat-icon"><i class="bi bi-person-workspace"></i></div><div><div class="stat-label">CONTRACTOR PAYABLE</div><div class="stat-value"><?= fmt_money($contractorPayable) ?></div></div></div></div></div>
+            <div class="col-md-3"><div class="card stat-card bg-grad-green"><div class="stat-body"><div class="stat-icon"><i class="bi bi-cash-stack"></i></div><div><div class="stat-label">CONTRACTOR PAID</div><div class="stat-value"><?= fmt_money($contractorPaid) ?></div></div></div></div></div>
+            <div class="col-md-3"><div class="card stat-card bg-grad-purple"><div class="stat-body"><div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div><div><div class="stat-label">TOTAL INVESTMENT</div><div class="stat-value"><?= fmt_money($totalInvestment) ?></div></div></div></div></div>
+        </div>
+
+        <?php if ($recentIssues): ?>
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-box-seam me-2"></i>Recent Material Issues</span>
+                <a href="material_issues.php?project_id=<?= $id ?>" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Date</th><th>Issue No</th><th>Contractor</th><th class="text-end">Amount</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($recentIssues as $mi): ?>
+                            <tr>
+                                <td><?= fmt_date($mi['issue_date']) ?></td>
+                                <td><a href="material_issue_view.php?id=<?= $mi['id'] ?>"><?= e($mi['issue_no']) ?></a></td>
+                                <td><?= e($mi['contractor_name']) ?></td>
+                                <td class="text-end"><?= fmt_money($mi['total_amount']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 

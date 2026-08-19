@@ -16,6 +16,7 @@ if (is_post() && $canEdit) {
         $account_no = trim($_POST['account_no'] ?? '');
         $iban = trim($_POST['iban'] ?? '');
         $branch = trim($_POST['branch'] ?? '');
+        $opening_balance = (float)($_POST['opening_balance'] ?? 0);
         $status = (int)($_POST['status'] ?? 1);
         if ($name === '') {
             flash('danger', 'Bank name is required.');
@@ -24,10 +25,10 @@ if (is_post() && $canEdit) {
             if ($dup) {
                 flash('danger', 'A bank with this name already exists.');
             } elseif ($id > 0) {
-                db_exec("UPDATE banks SET name=?, account_title=?, account_no=?, iban=?, branch=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$name, $account_title, $account_no, $iban, $branch, $status, $id]);
+                db_exec("UPDATE banks SET name=?, account_title=?, account_no=?, iban=?, branch=?, opening_balance=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?", [$name, $account_title, $account_no, $iban, $branch, $opening_balance, $status, $id]);
                 flash('success', 'Bank updated successfully.');
             } else {
-                db_exec("INSERT INTO banks (name, account_title, account_no, iban, branch, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$name, $account_title, $account_no, $iban, $branch, $status]);
+                db_exec("INSERT INTO banks (name, account_title, account_no, iban, branch, opening_balance, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())", [$name, $account_title, $account_no, $iban, $branch, $opening_balance, $status]);
                 flash('success', 'Bank added successfully.');
             }
         }
@@ -56,7 +57,7 @@ include '../includes/header.php';
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover mb-0" id="dataTable">
-                <thead><tr><th style="width:50px">#</th><th>Name</th><th>Account Title</th><th>Account No</th><th>IBAN</th><th>Branch</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                <thead><tr><th style="width:50px">#</th><th>Name</th><th>Account Title</th><th>Account No</th><th>IBAN</th><th>Branch</th><th class="text-end">Opening Balance</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
                 <tbody>
                 <?php foreach ($records as $i => $r): ?>
                     <tr>
@@ -66,10 +67,11 @@ include '../includes/header.php';
                         <td><?= e($r['account_no']) ?></td>
                         <td class="small text-muted"><?= e($r['iban']) ?></td>
                         <td><?= e($r['branch']) ?></td>
+                        <td class="text-end"><?= fmt_money($r['opening_balance'] ?? 0) ?></td>
                         <td><?= $r['status'] ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' ?></td>
                         <td class="text-end">
                             <?php if ($canEdit): ?>
-                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#recordModal" data-edit='<?= h(json_encode(['id' => $r['id'], 'name' => $r['name'], 'account_title' => $r['account_title'], 'account_no' => $r['account_no'], 'iban' => $r['iban'], 'branch' => $r['branch'], 'status' => $r['status']])) ?>'><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#recordModal" data-edit='<?= h(json_encode(['id' => $r['id'], 'name' => $r['name'], 'account_title' => $r['account_title'], 'account_no' => $r['account_no'], 'iban' => $r['iban'], 'branch' => $r['branch'], 'opening_balance' => $r['opening_balance'] ?? 0, 'status' => $r['status']])) ?>'><i class="bi bi-pencil"></i></button>
                             <form method="post" class="d-inline" data-confirm="Delete this bank? This cannot be undone.">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete">
@@ -81,7 +83,7 @@ include '../includes/header.php';
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$records): ?>
-                    <tr><td colspan="8"><div class="empty-state"><i class="bi bi-bank"></i><p>No banks yet</p></div></td></tr>
+                    <tr><td colspan="9"><div class="empty-state"><i class="bi bi-bank"></i><p>No banks yet</p></div></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -119,6 +121,11 @@ include '../includes/header.php';
                         <div class="col-md-6">
                             <label class="form-label">Branch</label>
                             <input type="text" name="branch" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Opening Balance (Rs.)</label>
+                            <input type="number" step="0.01" name="opening_balance" class="form-control" value="0.00">
+                            <div class="form-text">Enter once, then lock via Opening Balances page.</div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Status</label>

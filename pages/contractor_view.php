@@ -119,6 +119,7 @@ if (is_post() && $canEdit) {
         $ent = db_get("SELECT * FROM contractor_entries WHERE id = ? AND contractor_id = ?", [$eid, $id]);
         if ($ent) {
             if ($ent['voucher_id']) {
+                db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$ent['voucher_id']]);
                 db_exec("DELETE FROM vouchers WHERE id = ?", [$ent['voucher_id']]);
             }
             db_exec("DELETE FROM contractor_entries WHERE id = ?", [$eid]);
@@ -162,6 +163,7 @@ $voucherLines = db_all("SELECT vi.item_description, vi.debit, vi.credit, v.vouch
                         ORDER BY v.voucher_date, v.id", [$conAccId, $id]);
 $banks = db_all("SELECT * FROM banks ORDER BY name");
 $accounts = db_all("SELECT * FROM chart_of_accounts ORDER BY code");
+$conAccId2 = contractor_payable_account_id($id, $contractor['full_name']);
 $constructionAcc = db_get("SELECT id FROM chart_of_accounts WHERE code = '5600'");
 $projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
 $contractorProjects = db_all("SELECT cp.project_id, p.name, p.location
@@ -259,9 +261,6 @@ include '../includes/header.php';
     <h5 class="mb-0"><?= e($contractor['full_name']) ?></h5>
     <span class="badge bg-light text-dark border"><?= e($contractor['contractor_no']) ?></span>
     <?= $contractor['status'] ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' ?>
-    <?php foreach ($contractorProjects as $cp): ?>
-    <a class="badge bg-info-subtle text-info-emphasis border text-decoration-none" href="projects.php?id=<?= $cp['project_id'] ?>"><i class="bi bi-building me-1"></i><?= e($cp['name']) ?></a>
-    <?php endforeach; ?>
 </div>
 
 <div class="row g-3 mb-3">
@@ -271,155 +270,188 @@ include '../includes/header.php';
     <div class="col-md-3"><div class="card stat-card bg-grad-blue"><div class="stat-body"><div class="stat-icon"><i class="bi bi-people"></i></div><div><div class="stat-label">SPECIALTY</div><div class="stat-value small fw-medium"><?= e($contractor['specialty'] ?: '-') ?></div></div></div></div></div>
 </div>
 
-<?php if ($canEdit): ?>
-<div class="card mb-3">
-    <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Add Entry</div>
-    <div class="card-body">
-        <form method="post">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="entry_add">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label">Entry Type</label>
-                    <select name="entry_type" id="selType" class="form-select" required>
-                        <option value="payable">Payable</option>
-                        <option value="paid">Paid</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Entry No</label>
-                    <input type="text" name="entry_no" class="form-control" placeholder="Auto if blank">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Date</label>
-                    <input type="date" name="entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Amount</label>
-                    <input type="number" step="0.01" name="amount" class="form-control" required data-mask-money>
-                </div>
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cProfile">Profile</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#cProjects">Projects (<?= count($contractorProjects) ?>)</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#cSummary">Project Summary</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#cLedger">Ledger</button></li>
+</ul>
 
-                <div class="col-md-6" id="secPayable" data-sec="payable">
-                    <label class="form-label">Debit Account (Expense)</label>
-                    <select name="account_id" class="form-select">
-                        <option value="">Select Account</option>
-                        <?php foreach ($accounts as $a): ?><option value="<?= $a['id'] ?>" <?= $constructionAcc && (int)$constructionAcc['id'] === (int)$a['id'] ? 'selected' : '' ?>><?= e($a['code']) ?> - <?= e($a['name']) ?></option><?php endforeach; ?>
-                    </select>
-                    <div class="form-text">Contractor payable kis expense head par lagega (default Construction Expense).</div>
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="cProfile">
+        <div class="card">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3"><div class="text-muted small">Contractor No</div><div class="fw-medium"><?= e($contractor['contractor_no']) ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Full Name</div><div class="fw-medium"><?= e($contractor['full_name']) ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Company</div><div class="fw-medium"><?= e($contractor['company'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Specialty</div><div class="fw-medium"><?= e($contractor['specialty'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">CNIC</div><div class="fw-medium"><?= e($contractor['cnic'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Phone</div><div class="fw-medium"><?= e($contractor['phone'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">WhatsApp</div><div class="fw-medium"><?= e($contractor['whatsapp'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Email</div><div class="fw-medium"><?= e($contractor['email'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Bank</div><div class="fw-medium"><?= e($contractor['bank_name'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Bank Account Title</div><div class="fw-medium"><?= e($contractor['bank_account_title'] ?? '-') ?></div></div>
+                    <div class="col-md-3"><div class="text-muted small">Bank Account No</div><div class="fw-medium"><?= e($contractor['bank_account_no'] ?? '-') ?></div></div>
+                    <div class="col-md-6"><div class="text-muted small">Address</div><div class="fw-medium"><?= e($contractor['address'] ?? '-') ?></div></div>
                 </div>
-
-                <div class="col-md-6 d-none" id="secPayment" data-sec="paid">
-                    <label class="form-label">Paid From</label>
-                    <select name="pay_from" class="form-select">
-                        <option value="cash">Cash</option>
-                        <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
-                    </select>
-                    <div class="form-text">Payment kis se ki gayi.</div>
-                </div>
-
-                <div class="col-12">
-<div class="card mb-3">
-    <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Project-wise Summary</div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead><tr><th>Project</th><th class="text-end">Payable</th><th class="text-end">Paid</th><th class="text-end">Balance</th></tr></thead>
-                <tbody>
-                <?php foreach ($projectSummary as $ps): ?>
-                    <tr>
-                        <td class="fw-medium"><a class="text-decoration-none" href="projects.php?id=<?= $ps['project_id'] ?>"><?= e($ps['name']) ?></a></td>
-                        <td class="text-end"><?= fmt_money($ps['payable']) ?></td>
-                        <td class="text-end"><?= fmt_money($ps['paid']) ?></td>
-                        <td class="text-end fw-medium <?= $ps['balance'] > 0 ? 'text-danger' : ($ps['balance'] < 0 ? 'text-success' : '') ?>"><?= fmt_money($ps['balance']) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if ($unassignedPayable || $unassignedPaid): ?>
-                    <tr>
-                        <td class="text-muted">No Project</td>
-                        <td class="text-end"><?= fmt_money($unassignedPayable) ?></td>
-                        <td class="text-end"><?= fmt_money($unassignedPaid) ?></td>
-                        <td class="text-end fw-medium <?= ($unassignedPayable - $unassignedPaid) > 0 ? 'text-danger' : (($unassignedPayable - $unassignedPaid) < 0 ? 'text-success' : '') ?>"><?= fmt_money($unassignedPayable - $unassignedPaid) ?></td>
-                    </tr>
-                <?php endif; ?>
-                <?php if (!$projectSummary && !($unassignedPayable || $unassignedPaid)): ?>
-                    <tr><td colspan="4" class="text-center text-muted py-3">No entries yet</td></tr>
-                <?php endif; ?>
-                </tbody>
-            </table>
+            </div>
         </div>
     </div>
-</div>
 
-<div class="row g-3">
+    <div class="tab-pane fade" id="cProjects">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div><i class="bi bi-building me-2"></i>Linked Projects</div>
+                <?php if ($canEdit): ?>
+                <form method="post" class="d-flex gap-2 align-items-center">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="project_add">
+                    <select name="project_id" class="form-select form-select-sm" style="max-width:260px" required>
+                        <option value="">Link a project...</option>
+                        <?php $linkedIds = array_column($contractorProjects, 'project_id'); ?>
+                        <?php foreach ($projects as $p): if (in_array($p['id'], $linkedIds)) continue; ?>
+                        <option value="<?= $p['id'] ?>"><?= e($p['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i></button>
+                </form>
+                <?php endif; ?>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Project</th><th>Location</th><th class="text-end">Payable</th><th class="text-end">Paid</th><th class="text-end">Balance</th><th class="text-end">Actions</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($projectSummary as $ps): ?>
+                            <tr>
+                                <td><a href="project_view.php?id=<?= $ps['project_id'] ?>" class="text-decoration-none fw-medium"><?= e($ps['name']) ?></a></td>
+                                <td class="small text-muted">-</td>
+                                <td class="text-end"><?= fmt_money($ps['payable']) ?></td>
+                                <td class="text-end"><?= fmt_money($ps['paid']) ?></td>
+                                <td class="text-end fw-medium <?= $ps['balance'] > 0 ? 'text-danger' : ($ps['balance'] < 0 ? 'text-success' : '') ?>"><?= fmt_money($ps['balance']) ?></td>
+                                <td class="text-end">
+                                    <a href="contractor_view.php?id=<?= $id ?>&project_id=<?= $ps['project_id'] ?>#cLedger" class="btn btn-sm btn-outline-primary"><i class="bi bi-book"></i></a>
+                                    <?php if ($canEdit): ?>
+                                    <form method="post" class="d-inline" data-confirm="Remove this project from the contractor?">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="project_remove">
+                                        <input type="hidden" name="project_id" value="<?= $ps['project_id'] ?>">
+                                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i></button>
+                                    </form>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$projectSummary): ?>
+                            <tr><td colspan="6" class="text-center text-muted py-4">No projects linked yet</td></tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="cSummary">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Project-wise Summary</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Project</th><th class="text-end">Payable</th><th class="text-end">Paid</th><th class="text-end">Balance</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($projectSummary as $ps): ?>
+                            <tr>
+                                <td class="fw-medium"><a class="text-decoration-none" href="project_view.php?id=<?= $ps['project_id'] ?>"><?= e($ps['name']) ?></a></td>
+                                <td class="text-end"><?= fmt_money($ps['payable']) ?></td>
+                                <td class="text-end"><?= fmt_money($ps['paid']) ?></td>
+                                <td class="text-end fw-medium <?= $ps['balance'] > 0 ? 'text-danger' : ($ps['balance'] < 0 ? 'text-success' : '') ?>"><?= fmt_money($ps['balance']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if ($unassignedPayable || $unassignedPaid): ?>
+                            <tr>
+                                <td class="text-muted">No Project</td>
+                                <td class="text-end"><?= fmt_money($unassignedPayable) ?></td>
+                                <td class="text-end"><?= fmt_money($unassignedPaid) ?></td>
+                                <td class="text-end fw-medium <?= ($unassignedPayable - $unassignedPaid) > 0 ? 'text-danger' : (($unassignedPayable - $unassignedPaid) < 0 ? 'text-success' : '') ?>"><?= fmt_money($unassignedPayable - $unassignedPaid) ?></td>
+                            </tr>
+                        <?php endif; ?>
+                        <?php if (!$projectSummary && !($unassignedPayable || $unassignedPaid)): ?>
+                            <tr><td colspan="4" class="text-center text-muted py-3">No entries yet</td></tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="cLedger">
+        <?php if ($canEdit): ?>
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Add Entry</div>
+            <div class="card-body">
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="entry_add">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Entry Type</label>
+                            <select name="entry_type" id="selType" class="form-select" required>
+                                <option value="payable">Payable</option>
+                                <option value="paid">Paid</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Entry No</label>
+                            <input type="text" name="entry_no" class="form-control" placeholder="Auto if blank">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date</label>
+                            <input type="date" name="entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Amount</label>
+                            <input type="number" step="0.01" name="amount" class="form-control" required data-mask-money>
+                        </div>
+
+                        <div class="col-md-6" id="secPayable" data-sec="payable">
+                            <label class="form-label">Debit Account (Expense)</label>
+                            <select name="account_id" class="form-select">
+                                <option value="">Select Account</option>
+                                <?php foreach ($accounts as $a): ?><option value="<?= $a['id'] ?>" <?= $constructionAcc && (int)$constructionAcc['id'] === (int)$a['id'] ? 'selected' : '' ?>><?= e($a['code']) ?> - <?= e($a['name']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 d-none" id="secPayment" data-sec="paid">
+                            <label class="form-label">Paid From</label>
+                            <select name="pay_from" class="form-select">
+                                <option value="cash">Cash</option>
+                                <?php foreach ($banks as $b): ?><option value="bank:<?= $b['id'] ?>"><?= e($b['name']) ?> - <?= e($b['account_no'] ?? '') ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+
                         <div class="col-md-4">
                             <label class="form-label">Project</label>
                             <select name="project_id" class="form-select">
                                 <option value="">No Project</option>
                                 <?php foreach ($contractorProjects as $cp): ?><option value="<?= $cp['project_id'] ?>"><?= e($cp['name']) ?></option><?php endforeach; ?>
                             </select>
-                            <div class="form-text">Entry kis project ke khilaf hai.</div>
                         </div>
                         <div class="col-md-8">
                             <label class="form-label">Narration</label>
                             <input type="text" name="narration" class="form-control" placeholder="Optional">
                         </div>
                     </div>
-                </div>
-            </div>
-            <div class="mt-3">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save Entry</button>
-            </div>
-        </form>
-    </div>
-</div>
-<?php endif; ?>
-
-<div class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <div><i class="bi bi-building me-2"></i>Projects (<?= count($contractorProjects) ?>)</div>
-        <?php if ($canEdit): ?>
-        <form method="post" class="d-flex gap-2 align-items-center">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="project_add">
-            <select name="project_id" class="form-select form-select-sm" style="max-width:260px" required>
-                <option value="">Link a project...</option>
-                <?php $linkedIds = array_column($contractorProjects, 'project_id'); ?>
-                <?php foreach ($projects as $p): if (in_array($p['id'], $linkedIds)) continue; ?>
-                <option value="<?= $p['id'] ?>"><?= e($p['name']) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i></button>
-        </form>
-        <?php endif; ?>
-    </div>
-    <div class="card-body">
-        <?php if ($contractorProjects): ?>
-        <div class="d-flex flex-wrap gap-2">
-            <?php foreach ($contractorProjects as $cp): ?>
-            <div class="border rounded px-3 py-2 d-flex align-items-center gap-3">
-                <div>
-                    <a class="fw-medium text-decoration-none" href="projects.php?id=<?= $cp['project_id'] ?>"><?= e($cp['name']) ?></a>
-                    <div class="small text-muted"><?= e($cp['location'] ?: '-') ?></div>
-                </div>
-                <?php if ($canEdit): ?>
-                <form method="post" class="m-0" data-confirm="Remove this project from the contractor?">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="project_remove">
-                    <input type="hidden" name="project_id" value="<?= $cp['project_id'] ?>">
-                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i></button>
+                    <div class="mt-3">
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save Entry</button>
+                    </div>
                 </form>
-                <?php endif; ?>
             </div>
-            <?php endforeach; ?>
         </div>
-        <?php else: ?>
-        <div class="text-muted small py-2">Is contractor se abhi koi project link nahi hai.</div>
         <?php endif; ?>
-    </div>
-</div>
 
-<div class="row g-3">
-    <div class="col-xl-8">
         <div class="card">
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <div class="d-flex align-items-center gap-2">
@@ -480,25 +512,6 @@ include '../includes/header.php';
             </div>
         </div>
     </div>
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-header"><i class="bi bi-info-circle me-2"></i>Contractor Details</div>
-            <div class="card-body">
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Company</dt><dd class="col-sm-8"><?= e($contractor['company'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Specialty</dt><dd class="col-sm-8"><?= e($contractor['specialty'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">CNIC</dt><dd class="col-sm-8"><?= e($contractor['cnic'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Phone</dt><dd class="col-sm-8"><?= e($contractor['phone'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">WhatsApp</dt><dd class="col-sm-8"><?= e($contractor['whatsapp'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Email</dt><dd class="col-sm-8"><?= e($contractor['email'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Bank</dt><dd class="col-sm-8"><?= e($contractor['bank_name'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Bank Title</dt><dd class="col-sm-8"><?= e($contractor['bank_account_title'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Bank Account</dt><dd class="col-sm-8"><?= e($contractor['bank_account_no'] ?: '-') ?></dd>
-                    <dt class="col-sm-4">Address</dt><dd class="col-sm-8"><?= e($contractor['address'] ?: '-') ?></dd>
-                </dl>
-            </div>
-        </div>
-    </div>
 </div>
 
 <?php if ($canEdit): ?>
@@ -516,5 +529,13 @@ include '../includes/header.php';
 })();
 </script>
 <?php endif; ?>
+
+<script>
+$(function () {
+    if (location.hash) {
+        $('.nav-pills .nav-link[data-bs-target="' + location.hash.replace(/[^a-zA-Z0-9_#]/g, '') + '"]').tab('show');
+    }
+});
+</script>
 
 <?php include '../includes/footer.php'; ?>

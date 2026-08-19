@@ -34,9 +34,14 @@ if (is_post()) {
     $bankId = (int)($_POST['bank_id'] ?? 0) ?: null;
     $reference = trim($_POST['reference'] ?? '');
 
+    if ($paymentMode === 'credit') {
+        $paidAmount = 0;
+    }
+
     $descriptions = $_POST['item_description'] ?? [];
     $quantities = $_POST['item_quantity'] ?? [];
     $unitPrices = $_POST['item_unit_price'] ?? [];
+    $productIds = $_POST['item_product_id'] ?? [];
 
     $itemCount = count($descriptions);
     if ($vendorId <= 0) {
@@ -59,10 +64,11 @@ if (is_post()) {
         $desc = trim($descriptions[$i] ?? '');
         $qty = (float)($quantities[$i] ?? 1);
         $price = (float)($unitPrices[$i] ?? 0);
+        $pid = (int)($productIds[$i] ?? 0) ?: null;
         if ($desc === '' && $price <= 0) continue;
         $amt = round($qty * $price, 2);
         $totalAmount += $amt;
-        $lineItems[] = ['description' => $desc, 'quantity' => $qty, 'unit_price' => $price, 'amount' => $amt];
+        $lineItems[] = ['description' => $desc, 'quantity' => $qty, 'unit_price' => $price, 'amount' => $amt, 'product_id' => $pid];
     }
     $netAmount = $totalAmount - $discount;
     if ($netAmount < 0) $netAmount = 0;
@@ -83,18 +89,25 @@ if (is_post()) {
     }
 
     if ($editId && $purchase) {
+        $oldItems = db_all("SELECT product_id, quantity, unit_cost FROM purchase_items WHERE purchase_id = ?", [$editId]);
+        foreach ($oldItems as $oi) {
+            if ($oi['product_id']) stock_adjust($oi['product_id'], 'issue', (float)$oi['quantity'], (float)$oi['unit_cost'], 'purchase', $editId);
+        }
         db_exec("UPDATE purchases SET vendor_id=?, purchase_date=?, project_id=?, narration=?, total_amount=?, discount=?, paid_amount=?, payment_mode=?, bank_id=?, reference=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?",
             [$vendorId, $purchaseDate, $projectId, $narration, $totalAmount, $discount, $paidAmount, $paymentMode, $bankId, $reference, $status, $editId]);
         db_exec("DELETE FROM purchase_items WHERE purchase_id = ?", [$editId]);
         foreach ($lineItems as $li) {
-            db_exec("INSERT INTO purchase_items (purchase_id, description, quantity, unit_price, amount, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-                [$editId, $li['description'], $li['quantity'], $li['unit_price'], $li['amount']]);
+            db_exec("INSERT INTO purchase_items (purchase_id, product_id, description, quantity, unit_price, amount, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                [$editId, $li['product_id'], $li['description'], $li['quantity'], $li['unit_price'], $li['amount']]);
+            if ($li['product_id']) stock_adjust($li['product_id'], 'purchase', $li['quantity'], $li['unit_price'], 'purchase', $editId, $projectId);
         }
         if ($oldVoucherId) {
             db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$oldVoucherId]);
             db_exec("DELETE FROM vouchers WHERE id = ?", [$oldVoucherId]);
         }
         if ($oldPaymentVoucherId) {
+            $linkedVendorPay = db_get("SELECT id FROM vendor_payments WHERE voucher_id = ?", [$oldPaymentVoucherId]);
+            if ($linkedVendorPay) db_exec("DELETE FROM vendor_payments WHERE id = ?", [$linkedVendorPay['id']]);
             db_exec("DELETE FROM voucher_items WHERE voucher_id = ?", [$oldPaymentVoucherId]);
             db_exec("DELETE FROM vouchers WHERE id = ?", [$oldPaymentVoucherId]);
         }
@@ -105,8 +118,9 @@ if (is_post()) {
         $purchaseId = db_exec("INSERT INTO purchases (purchase_no, vendor_id, purchase_date, project_id, narration, total_amount, discount, paid_amount, payment_mode, bank_id, reference, status, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
             [$purchaseNo, $vendorId, $purchaseDate, $projectId, $narration, $totalAmount, $discount, $paidAmount, $paymentMode, $bankId, $reference, $status]);
         foreach ($lineItems as $li) {
-            db_exec("INSERT INTO purchase_items (purchase_id, description, quantity, unit_price, amount, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
-                [$purchaseId, $li['description'], $li['quantity'], $li['unit_price'], $li['amount']]);
+            db_exec("INSERT INTO purchase_items (purchase_id, product_id, description, quantity, unit_price, amount, created_date, created_time, updated_date, updated_time) VALUES (?,?,?,?,?,?,CURDATE(),CURTIME(),CURDATE(),CURTIME())",
+                [$purchaseId, $li['product_id'], $li['description'], $li['quantity'], $li['unit_price'], $li['amount']]);
+            if ($li['product_id']) stock_adjust($li['product_id'], 'purchase', $li['quantity'], $li['unit_price'], 'purchase', $purchaseId, $projectId);
         }
         flash('success', 'Purchase saved.');
     }
@@ -151,6 +165,7 @@ if (is_post()) {
 $projects = db_all("SELECT * FROM projects WHERE status = 1 ORDER BY name");
 $vendors = db_all("SELECT * FROM vendors ORDER BY business_name");
 $banks = db_all("SELECT * FROM banks ORDER BY name");
+$products = db_all("SELECT id, product_no, name, category, unit FROM products WHERE status = 1 ORDER BY name");
 $defaultProject = $editId && $purchase ? $purchase['project_id'] : active_project_id();
 $defaultDate = $editId && $purchase ? $purchase['purchase_date'] : date('Y-m-d');
 
@@ -215,7 +230,7 @@ include '../includes/header.php';
                             <thead>
                                 <tr>
                                     <th style="width:30px">#</th>
-                                    <th>Description</th>
+                                    <th>Product / Description</th>
                                     <th style="width:100px">Qty</th>
                                     <th style="width:140px">Unit Price</th>
                                     <th style="width:140px">Amount</th>
@@ -266,6 +281,10 @@ include '../includes/header.php';
                                 <input class="form-check-input" type="radio" name="payment_mode" id="pmBank" value="bank" <?= ($purchase['payment_mode'] ?? '') === 'bank' ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="pmBank">Bank</label>
                             </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="payment_mode" id="pmCredit" value="credit" <?= ($purchase['payment_mode'] ?? '') === 'credit' ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="pmCredit">Credit</label>
+                            </div>
                         </div>
                     </div>
                     <div class="mb-3 d-none" id="blockBank">
@@ -314,6 +333,7 @@ include '../includes/header.php';
 <script>
 (function () {
     var existingItems = <?= json_encode($items) ?>;
+    var products = <?= json_encode($products) ?>;
     var body = document.getElementById('itemsBody');
     var discountEl = document.getElementById('discount');
     var paidAmountEl = document.getElementById('paidAmount');
@@ -321,6 +341,7 @@ include '../includes/header.php';
     var balanceCard = document.getElementById('vendorBalanceCard');
     var pmCash = document.getElementById('pmCash');
     var pmBank = document.getElementById('pmBank');
+    var pmCredit = document.getElementById('pmCredit');
     var blockBank = document.getElementById('blockBank');
     var rowIdx = 0;
     var prevBalance = 0;
@@ -350,9 +371,17 @@ include '../includes/header.php';
         var tr = document.createElement('tr');
         tr.dataset.idx = rowIdx++;
         var initialAmt = (data.amount ? parseFloat(data.amount) : ((parseFloat(data.quantity) || 1) * (parseFloat(data.unit_price) || 0)));
+        var prodOpts = '<option value="">-- Manual --</option>';
+        products.forEach(function(p) {
+            var sel = (data.product_id && parseInt(data.product_id) === p.id) ? ' selected' : '';
+            prodOpts += '<option value="' + p.id + '"' + sel + '>' + p.name + (p.category ? ' (' + p.category + ')' : '') + '</option>';
+        });
         tr.innerHTML =
             '<td class="pt-2">' + tr.dataset.idx + '</td>' +
-            '<td><input type="text" name="item_description[]" class="form-control form-control-sm" value="' + (data.description || '') + '"></td>' +
+            '<td>' +
+                '<select name="item_product_id[]" class="form-select form-select-sm item-product">' + prodOpts + '</select>' +
+                '<input type="text" name="item_description[]" class="form-control form-control-sm mt-1 item-desc" value="' + (data.description || '') + '" placeholder="Description">' +
+            '</td>' +
             '<td><input type="number" step="0.01" name="item_quantity[]" class="form-control form-control-sm item-qty" value="' + (data.quantity || 1) + '"></td>' +
             '<td><input type="number" step="0.01" name="item_unit_price[]" class="form-control form-control-sm item-price" value="' + (data.unit_price || 0) + '"></td>' +
             '<td class="item-amount pt-2 fw-medium text-end">' + initialAmt.toFixed(2) + '</td>' +
@@ -360,6 +389,17 @@ include '../includes/header.php';
         body.appendChild(tr);
         tr.querySelector('.item-qty').addEventListener('input', recalc);
         tr.querySelector('.item-price').addEventListener('input', recalc);
+        tr.querySelector('.item-product').addEventListener('change', function () {
+            var sel = this.options[this.selectedIndex];
+            if (this.value) {
+                var pid = parseInt(this.value);
+                var prod = products.find(function(p) { return p.id === pid; });
+                if (prod) {
+                    var descInput = tr.querySelector('.item-desc');
+                    if (!descInput.value) descInput.value = prod.name;
+                }
+            }
+        });
         recalc();
     }
 
@@ -379,10 +419,18 @@ include '../includes/header.php';
     discountEl.addEventListener('input', recalc);
     paidAmountEl.addEventListener('input', recalc);
 
-    function toggleBank() { blockBank.classList.toggle('d-none', !pmBank.checked); }
-    pmCash.addEventListener('change', toggleBank);
-    pmBank.addEventListener('change', toggleBank);
-    toggleBank();
+    function togglePayment() {
+        var isCredit = pmCredit.checked;
+        blockBank.classList.toggle('d-none', !pmBank.checked);
+        paidAmountEl.closest('.mb-3').classList.toggle('d-none', isCredit);
+        var refInput = document.querySelector('input[name="reference"]');
+        if (refInput) refInput.closest('.mb-3').classList.toggle('d-none', isCredit);
+        if (isCredit) { paidAmountEl.value = 0; recalc(); }
+    }
+    pmCash.addEventListener('change', togglePayment);
+    pmBank.addEventListener('change', togglePayment);
+    pmCredit.addEventListener('change', togglePayment);
+    togglePayment();
 
     vendorSel.addEventListener('change', function () {
         var vid = vendorSel.value;

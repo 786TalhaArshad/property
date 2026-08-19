@@ -9,7 +9,7 @@ $from = trim($_GET['from'] ?? '');
 $to = trim($_GET['to'] ?? date('Y-m-d'));
 $project_id = (int)($_GET['project_id'] ?? active_project_id());
 
-$cashAcc = db_get("SELECT id FROM chart_of_accounts WHERE code = '1000'");
+$cashAcc = db_get("SELECT id, opening_balance FROM chart_of_accounts WHERE code = '1000'");
 if (!$cashAcc) {
     flash('danger', 'Cash account not found in chart of accounts.');
     redirect('index.php');
@@ -81,7 +81,7 @@ usort($filtered, function ($a, $b) {
     return strcmp($a['date'], $b['date']) ?: strcmp($a['ref'], $b['ref']);
 });
 
-$opening = 0.0;
+$opening = (float)$cashAcc['opening_balance'];
 if ($from !== '') {
     foreach ($rows as $r) {
         if ($r['date'] >= $from) continue;

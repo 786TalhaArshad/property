@@ -40,9 +40,11 @@ if ($account_id > 0) {
         $where .= " AND v.project_id = ?";
         $params[] = $project_id;
     }
-    $entries = db_all("SELECT vi.*, v.voucher_no, v.voucher_date, v.voucher_type, v.narration, v.project_id
+    $entries = db_all("SELECT vi.*, v.voucher_no, v.voucher_date, v.voucher_type, v.narration, v.project_id,
+                       coa.code AS account_code, coa.name AS account_name
                        FROM voucher_items vi
                        JOIN vouchers v ON v.id = vi.voucher_id
+                       JOIN chart_of_accounts coa ON coa.id = vi.account_id
                        WHERE vi.account_id IN ($placeholders) AND v.status = 'posted'$where
                        ORDER BY v.voucher_date, v.id", $params);
     $isCreditNormal = in_array($account['account_type'], ['income', 'liability', 'equity'], true);
@@ -109,7 +111,7 @@ include '../includes/header.php';
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover mb-0">
-                <thead><tr><th>Date</th><th>Voucher</th><th>Type</th><th>Project</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+                <thead><tr><th>Date</th><th>Voucher</th><th>Type</th><th>Project</th><?php if ($include_children): ?><th>Account</th><?php endif; ?><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
                 <tbody>
                 <tr class="table-light">
                     <td colspan="5" class="text-end fw-medium">Opening Balance</td>

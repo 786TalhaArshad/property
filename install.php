@@ -57,9 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Connection failed: ' . $conn->connect_error;
     } else {
         $conn->set_charset('utf8mb4');
-        $sqlFile = $APP_ROOT . '/database.sql';
+        $sqlFile = $APP_ROOT . '/property_erp_full.sql';
         if (!file_exists($sqlFile)) {
-            $error = 'database.sql not found in the project root.';
+            $error = 'property_erp_full.sql not found in the project root.';
         } else {
             $sql = file_get_contents($sqlFile);
             $sql = preg_replace('/^\xEF\xBB\xBF/', '', $sql);

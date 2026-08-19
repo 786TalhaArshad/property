@@ -152,6 +152,11 @@ if ($action === 'blocks') {
         $balance = (float)(db_get("SELECT COALESCE(SUM(s.rent_amount + s.late_charges - s.paid_amount),0) AS total FROM rent_schedule s JOIN rental_agreements ra ON ra.id = s.agreement_id WHERE ra.tenant_id = ? AND s.status IN ('pending','partial')", [$id])['total'] ?? 0);
     }
     $rows = ['balance' => $balance, 'name' => $name];
+} elseif ($action === 'product_search') {
+    $q = trim($_GET['q'] ?? '');
+    if (mb_strlen($q) >= 1) {
+        $rows = db_all("SELECT id, product_no, name, category, unit FROM products WHERE name LIKE ? AND status = 1 ORDER BY name LIMIT 20", ['%' . $q . '%']);
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

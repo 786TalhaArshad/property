@@ -38,8 +38,17 @@ if (is_post() && $canEdit) {
             flash('success', 'Vendor added successfully.');
         }
     } elseif ($action === 'delete') {
-        db_exec("DELETE FROM vendors WHERE id=?", [(int)($_POST['id'] ?? 0)]);
-        flash('success', 'Vendor deleted successfully.');
+        $delId = (int)($_POST['id'] ?? 0);
+        if ($delId > 0) {
+            db_exec("DELETE FROM vendors WHERE id=?", [$delId]);
+            if (db_affected_rows() > 0) {
+                flash('success', 'Vendor deleted successfully.');
+            } else {
+                flash('danger', 'Vendor not found or could not be deleted.');
+            }
+        } else {
+            flash('danger', 'Invalid vendor ID.');
+        }
     }
     redirect('vendors.php');
 }

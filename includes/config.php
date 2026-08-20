@@ -17,6 +17,15 @@ $appdir  = str_replace('\\', '/', APP_ROOT);
 $relative = '';
 if ($docroot && strpos($appdir, $docroot) === 0) {
     $relative = substr($appdir, strlen($docroot));
+} else {
+    $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/');
+    $scriptDir  = str_replace('\\', '/', dirname($scriptName));
+    $webDir     = str_replace('\\', '/', dirname($_SERVER['SCRIPT_FILENAME'] ?? APP_ROOT));
+    if ($webDir && $docroot && stripos($webDir, $docroot) === 0) {
+        $relative = rtrim(substr($webDir, strlen($docroot)), '/');
+    } elseif ($scriptDir && $scriptDir !== '/') {
+        $relative = rtrim($scriptDir, '/');
+    }
 }
 define('BASE_URL', rtrim($relative, '/'));
 

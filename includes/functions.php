@@ -5,7 +5,8 @@ function db_prepare($sql, $params = []) {
     global $mysqli;
     $stmt = $mysqli->prepare($sql);
     if (!$stmt) {
-        die('DB Error: ' . htmlspecialchars($mysqli->error) . ' in SQL: ' . htmlspecialchars($sql));
+        error_log('DB prepare error: ' . $mysqli->error . ' | SQL: ' . $sql);
+        die('A database error occurred. Please try again later.');
     }
     if ($params) {
         $types = '';
@@ -41,6 +42,11 @@ function db_exec($sql, $params = []) {
 function db_insert_id() {
     global $mysqli;
     return $mysqli->insert_id;
+}
+
+function db_affected_rows() {
+    global $mysqli;
+    return $mysqli->affected_rows;
 }
 
 function h($s) {
@@ -146,6 +152,13 @@ function csrf_check() {
 }
 
 function redirect($url) {
+    if (strpos($url, 'http://') !== 0 && strpos($url, 'https://') !== 0 && strpos($url, '/') !== 0) {
+        $url = BASE_URL . '/' . ltrim($url, '/');
+    }
+    if (headers_sent()) {
+        echo '<script>window.location.href=' . json_encode($url) . ';</script>';
+        exit;
+    }
     header('Location: ' . $url);
     exit;
 }

@@ -15,7 +15,10 @@ function db_prepare($sql, $params = []) {
         }
         $stmt->bind_param($types, ...$params);
     }
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        error_log('DB execute error: ' . $stmt->error . ' | SQL: ' . $sql);
+        die('A database error occurred. Please try again later.');
+    }
     return $stmt;
 }
 

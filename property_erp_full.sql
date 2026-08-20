@@ -90,6 +90,7 @@ CREATE TABLE `banks` (
   `iban` varchar(80) DEFAULT NULL,
   `branch` varchar(150) DEFAULT NULL,
   `status` tinyint(1) NOT NULL DEFAULT 1,
+  `opening_balance` decimal(14,2) NOT NULL DEFAULT 0.00,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
   `updated_date` date NOT NULL,
@@ -105,7 +106,7 @@ CREATE TABLE `banks` (
 
 LOCK TABLES `banks` WRITE;
 /*!40000 ALTER TABLE `banks` DISABLE KEYS */;
-INSERT INTO `banks` VALUES (1,'HBL','Prime Estate Pvt Ltd','0012345678901','PK12HBLB000012345678901','Gulberg, Lahore',1,'2026-07-31','08:14:12','2026-07-31','08:14:12'),(2,'UBL','Prime Estate Pvt Ltd','9876543210','PK12UNIL00009876543210','Main Boulevard, Lahore',1,'2026-07-31','08:14:12','2026-07-31','08:14:12'),(3,'Meezan Bank','Prime Estate Pvt Ltd','1122334455','PK12MEZN00001122334455','Gulberg, Lahore',1,'2026-07-31','08:14:12','2026-07-31','08:14:12');
+INSERT INTO `banks` (`id`, `name`, `account_title`, `account_no`, `iban`, `branch`, `status`, `created_date`, `created_time`, `updated_date`, `updated_time`) VALUES (1,'HBL','Prime Estate Pvt Ltd','0012345678901','PK12HBLB000012345678901','Gulberg, Lahore',1,'2026-07-31','08:14:12','2026-07-31','08:14:12'),(2,'UBL','Prime Estate Pvt Ltd','9876543210','PK12UNIL00009876543210','Main Boulevard, Lahore',1,'2026-07-31','08:14:12','2026-07-31','08:14:12'),(3,'Meezan Bank','Prime Estate Pvt Ltd','1122334455','PK12MEZN00001122334455','Gulberg, Lahore',1,'2026-07-31','08:14:12','2026-07-31','08:14:12');
 /*!40000 ALTER TABLE `banks` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -494,6 +495,8 @@ CREATE TABLE `customers` (
   `nominee_cnic` varchar(40) DEFAULT NULL,
   `nominee_relation` varchar(60) DEFAULT NULL,
   `photo` varchar(255) DEFAULT NULL,
+  `opening_balance` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `balance_type` enum('receivable','payable') NOT NULL DEFAULT 'receivable',
   `status` tinyint(1) NOT NULL DEFAULT 1,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
@@ -511,7 +514,7 @@ CREATE TABLE `customers` (
 
 LOCK TABLES `customers` WRITE;
 /*!40000 ALTER TABLE `customers` DISABLE KEYS */;
-INSERT INTO `customers` VALUES (1,'CUST-0001','Muhammad Ali','35202-1234567-1',NULL,'03001234001','03001234001','muhammad.ali@gmail.com','House 12, Block G, Model Town, Lahore',2,'Sana Ali','35202-2234567-1','Wife',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(2,'CUST-0002','Fatima Noor','35202-7654321-3',NULL,'03001234002','03001234002','fatima.noor@gmail.com','Flat 4B, Gulberg III, Lahore',2,'Omar Noor','35202-8654321-3','Brother',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(3,'CUST-0003','Ahmed Hassan','35201-1112223-5',NULL,'03001234003',NULL,'ahmed.hassan@gmail.com','DHA Phase 6, Karachi',1,'Zoya Hassan','35201-2112223-5','Wife',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(4,'CUST-0004','Sana Tariq','35202-3334445-7',NULL,'03001234004','03001234004','sana.tariq@gmail.com','House 5, Faisal Town, Lahore',2,'Tariq Mehmood','35202-4334445-7','Father',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(5,'CUST-0005','Usman Ghani','35202-5556667-9',NULL,'03001234005','03001234005','usman.ghani@gmail.com','G-10/4, Islamabad',3,'Ghani Bakhsh','35202-6556667-9','Father',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(6,'CUST-0006','Hira Shahid','35202-7778889-1',NULL,'03001234006',NULL,'hira.shahid@gmail.com','Westridge 2, Rawalpindi',4,'Shahid Malik','35202-8778889-1','Father',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(7,'CUST-9.2233720368548E+18','Talha Arshad','36103-8619181-9','','03171821122','03211677422','talha353523@gmail.com','Khanewal',2,'Bilal','3','brother',NULL,1,'2026-08-05','13:12:16','2026-08-05','13:12:16');
+INSERT INTO `customers` (`id`, `customer_no`, `full_name`, `cnic`, `passport_no`, `phone`, `whatsapp`, `email`, `address`, `city_id`, `nominee_name`, `nominee_cnic`, `nominee_relation`, `photo`, `status`, `created_date`, `created_time`, `updated_date`, `updated_time`) VALUES (1,'CUST-0001','Muhammad Ali','35202-1234567-1',NULL,'03001234001','03001234001','muhammad.ali@gmail.com','House 12, Block G, Model Town, Lahore',2,'Sana Ali','35202-2234567-1','Wife',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(2,'CUST-0002','Fatima Noor','35202-7654321-3',NULL,'03001234002','03001234002','fatima.noor@gmail.com','Flat 4B, Gulberg III, Lahore',2,'Omar Noor','35202-8654321-3','Brother',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(3,'CUST-0003','Ahmed Hassan','35201-1112223-5',NULL,'03001234003',NULL,'ahmed.hassan@gmail.com','DHA Phase 6, Karachi',1,'Zoya Hassan','35201-2112223-5','Wife',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(4,'CUST-0004','Sana Tariq','35202-3334445-7',NULL,'03001234004','03001234004','sana.tariq@gmail.com','House 5, Faisal Town, Lahore',2,'Tariq Mehmood','35202-4334445-7','Father',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(5,'CUST-0005','Usman Ghani','35202-5556667-9',NULL,'03001234005','03001234005','usman.ghani@gmail.com','G-10/4, Islamabad',3,'Ghani Bakhsh','35202-6556667-9','Father',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(6,'CUST-0006','Hira Shahid','35202-7778889-1',NULL,'03001234006',NULL,'hira.shahid@gmail.com','Westridge 2, Rawalpindi',4,'Shahid Malik','35202-8778889-1','Father',NULL,1,'2026-07-31','08:14:26','2026-07-31','08:14:26'),(7,'CUST-0007','Talha Arshad','36103-8619181-9','','03171821122','03211677422','talha353523@gmail.com','Khanewal',2,'Bilal','3','brother',NULL,1,'2026-08-05','13:12:16','2026-08-05','13:12:16');
 /*!40000 ALTER TABLE `customers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -565,6 +568,7 @@ CREATE TABLE `dealer_payments` (
   `bank_id` int(10) unsigned DEFAULT NULL,
   `reference` varchar(80) DEFAULT NULL,
   `remarks` varchar(255) DEFAULT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
   `updated_date` date NOT NULL,
@@ -967,6 +971,7 @@ CREATE TABLE `investor_ledger` (
   `debit` decimal(14,2) NOT NULL DEFAULT 0.00,
   `credit` decimal(14,2) NOT NULL DEFAULT 0.00,
   `balance` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
   `updated_date` date NOT NULL,
@@ -1297,6 +1302,7 @@ CREATE TABLE `owner_ledger` (
   `debit` decimal(14,2) NOT NULL DEFAULT 0.00,
   `credit` decimal(14,2) NOT NULL DEFAULT 0.00,
   `balance` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
   `updated_date` date NOT NULL,
@@ -1313,7 +1319,7 @@ CREATE TABLE `owner_ledger` (
 
 LOCK TABLES `owner_ledger` WRITE;
 /*!40000 ALTER TABLE `owner_ledger` DISABLE KEYS */;
-INSERT INTO `owner_ledger` VALUES (1,3,'2026-07-05','Rent settlement RA-0001 June 2026',0.00,360000.00,360000.00,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(2,2,'2026-06-30','Rent settlement RA-0002 June 2026 (pending)',0.00,335000.00,335000.00,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(3,2,'2026-07-31','Owner settlement',0.00,335000.00,670000.00,'2026-07-31','14:52:49','2026-07-31','14:52:49');
+INSERT INTO `owner_ledger` (`id`, `owner_id`, `entry_date`, `description`, `debit`, `credit`, `balance`, `created_date`, `created_time`, `updated_date`, `updated_time`) VALUES (1,3,'2026-07-05','Rent settlement RA-0001 June 2026',0.00,360000.00,360000.00,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(2,2,'2026-06-30','Rent settlement RA-0002 June 2026 (pending)',0.00,335000.00,335000.00,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(3,2,'2026-07-31','Owner settlement',0.00,335000.00,670000.00,'2026-07-31','14:52:49','2026-07-31','14:52:49');
 /*!40000 ALTER TABLE `owner_ledger` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1336,6 +1342,7 @@ CREATE TABLE `owner_settlements` (
   `payment_method_id` int(10) unsigned DEFAULT NULL,
   `bank_id` int(10) unsigned DEFAULT NULL,
   `remarks` varchar(255) DEFAULT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
   `updated_date` date NOT NULL,
@@ -1352,7 +1359,7 @@ CREATE TABLE `owner_settlements` (
 
 LOCK TABLES `owner_settlements` WRITE;
 /*!40000 ALTER TABLE `owner_settlements` DISABLE KEYS */;
-INSERT INTO `owner_settlements` VALUES (1,3,1,'2026-06-30',360000.00,0.00,360000.00,'paid',1,NULL,'June 2026 settlement RA-0001','2026-07-31','08:14:27','2026-07-31','08:14:27'),(2,2,2,'2026-06-30',340000.00,5000.00,335000.00,'paid',NULL,NULL,'June 2026 settlement RA-0002 (5% management fee)','2026-07-31','08:14:27','2026-07-31','14:52:49');
+INSERT INTO `owner_settlements` (`id`, `owner_id`, `agreement_id`, `settlement_date`, `rent_income`, `deductions`, `settlement_amount`, `status`, `payment_method_id`, `bank_id`, `remarks`, `created_date`, `created_time`, `updated_date`, `updated_time`) VALUES (1,3,1,'2026-06-30',360000.00,0.00,360000.00,'paid',1,NULL,'June 2026 settlement RA-0001','2026-07-31','08:14:27','2026-07-31','08:14:27'),(2,2,2,'2026-06-30',340000.00,5000.00,335000.00,'paid',NULL,NULL,'June 2026 settlement RA-0002 (5% management fee)','2026-07-31','08:14:27','2026-07-31','14:52:49');
 /*!40000 ALTER TABLE `owner_settlements` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1834,6 +1841,7 @@ DROP TABLE IF EXISTS `purchase_items`;
 CREATE TABLE `purchase_items` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `purchase_id` int(10) unsigned NOT NULL,
+  `product_id` int(10) unsigned DEFAULT NULL,
   `description` varchar(255) DEFAULT NULL,
   `expense_account_id` int(10) unsigned DEFAULT NULL,
   `quantity` decimal(10,2) NOT NULL DEFAULT 1.00,
@@ -1857,7 +1865,7 @@ CREATE TABLE `purchase_items` (
 
 LOCK TABLES `purchase_items` WRITE;
 /*!40000 ALTER TABLE `purchase_items` DISABLE KEYS */;
-INSERT INTO `purchase_items` VALUES (1,1,'CEMENT',NULL,100.00,100.00,10000.00,'2026-08-17','16:23:52','2026-08-17','16:23:52');
+INSERT INTO `purchase_items` (`id`, `purchase_id`, `product_id`, `description`, `quantity`, `unit_price`, `amount`, `created_date`, `created_time`, `updated_date`, `updated_time`) VALUES (1,1,NULL,'CEMENT',100.00,100.00,10000.00,'2026-08-17','16:23:52','2026-08-17','16:23:52');
 /*!40000 ALTER TABLE `purchase_items` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1878,7 +1886,7 @@ CREATE TABLE `purchases` (
   `total_amount` decimal(14,2) NOT NULL DEFAULT 0.00,
   `discount` decimal(14,2) NOT NULL DEFAULT 0.00,
   `paid_amount` decimal(14,2) NOT NULL DEFAULT 0.00,
-  `payment_mode` enum('cash','bank') NOT NULL DEFAULT 'cash',
+  `payment_mode` enum('cash','bank','credit') NOT NULL DEFAULT 'cash',
   `bank_id` int(10) unsigned DEFAULT NULL,
   `reference` varchar(80) DEFAULT NULL,
   `voucher_id` int(10) unsigned DEFAULT NULL,
@@ -2018,6 +2026,7 @@ CREATE TABLE `rent_collections` (
   `bank_id` int(10) unsigned DEFAULT NULL,
   `reference` varchar(80) DEFAULT NULL,
   `remarks` varchar(255) DEFAULT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
   `updated_date` date NOT NULL,
@@ -2034,7 +2043,7 @@ CREATE TABLE `rent_collections` (
 
 LOCK TABLES `rent_collections` WRITE;
 /*!40000 ALTER TABLE `rent_collections` DISABLE KEYS */;
-INSERT INTO `rent_collections` VALUES (2,2,1,'2026-02-05',60000.00,1,NULL,NULL,'February 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(3,3,1,'2026-03-05',60000.00,2,1,'TRX-8801','March 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(4,4,1,'2026-04-05',60000.00,1,NULL,NULL,'April 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(5,5,1,'2026-05-05',60000.00,2,1,'TRX-8877','May 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(6,6,1,'2026-06-05',60000.00,1,NULL,NULL,'June 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(7,13,2,'2026-02-06',85000.00,1,NULL,NULL,'February 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(8,14,2,'2026-03-06',85000.00,2,2,'TRX-8912','March 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(9,15,2,'2026-04-06',85000.00,1,NULL,NULL,'April 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(10,16,2,'2026-05-06',85000.00,1,NULL,NULL,'May 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(11,25,3,'2026-04-07',95000.00,2,3,'TRX-9020','April 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(12,1,1,'2026-01-05',60000.00,NULL,NULL,'','','2026-08-13','09:27:40','2026-08-13','09:27:40');
+INSERT INTO `rent_collections` (`id`, `schedule_id`, `agreement_id`, `collection_date`, `amount`, `payment_method_id`, `bank_id`, `reference`, `remarks`, `created_date`, `created_time`, `updated_date`, `updated_time`) VALUES (2,2,1,'2026-02-05',60000.00,1,NULL,NULL,'February 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(3,3,1,'2026-03-05',60000.00,2,1,'TRX-8801','March 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(4,4,1,'2026-04-05',60000.00,1,NULL,NULL,'April 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(5,5,1,'2026-05-05',60000.00,2,1,'TRX-8877','May 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(6,6,1,'2026-06-05',60000.00,1,NULL,NULL,'June 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(7,13,2,'2026-02-06',85000.00,1,NULL,NULL,'February 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(8,14,2,'2026-03-06',85000.00,2,2,'TRX-8912','March 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(9,15,2,'2026-04-06',85000.00,1,NULL,NULL,'April 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(10,16,2,'2026-05-06',85000.00,1,NULL,NULL,'May 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(11,25,3,'2026-04-07',95000.00,2,3,'TRX-9020','April 2026 rent','2026-07-31','08:14:27','2026-07-31','08:14:27'),(12,1,1,'2026-01-05',60000.00,NULL,NULL,'','','2026-08-13','09:27:40','2026-08-13','09:27:40');
 /*!40000 ALTER TABLE `rent_collections` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -2681,6 +2690,7 @@ CREATE TABLE `vendor_payments` (
   `bank_id` int(10) unsigned DEFAULT NULL,
   `reference` varchar(80) DEFAULT NULL,
   `remarks` varchar(255) DEFAULT NULL,
+  `voucher_id` int(10) unsigned DEFAULT NULL,
   `created_date` date NOT NULL,
   `created_time` time NOT NULL,
   `updated_date` date NOT NULL,
@@ -2794,6 +2804,13 @@ CREATE TABLE `vouchers` (
   `voucher_type` enum('cash_payment','cash_receipt','bank_payment','bank_receipt','journal') NOT NULL,
   `project_id` int(10) unsigned DEFAULT NULL,
   `narration` varchar(255) DEFAULT NULL,
+  `reference_no` varchar(80) DEFAULT NULL,
+  `credit_party_type` varchar(20) DEFAULT NULL,
+  `credit_party_id` int(10) unsigned DEFAULT NULL,
+  `debit_party_type` varchar(20) DEFAULT NULL,
+  `debit_party_id` int(10) unsigned DEFAULT NULL,
+  `amount` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `remarks` varchar(255) DEFAULT NULL,
   `status` enum('draft','posted') NOT NULL DEFAULT 'posted',
   `created_by` int(10) unsigned DEFAULT NULL,
   `created_date` date NOT NULL,
@@ -2813,7 +2830,7 @@ CREATE TABLE `vouchers` (
 
 LOCK TABLES `vouchers` WRITE;
 /*!40000 ALTER TABLE `vouchers` DISABLE KEYS */;
-INSERT INTO `vouchers` VALUES (1,'CR-0001','2026-07-05','cash_receipt',NULL,'Rent collected RA-0001 June 2026','posted',1,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(2,'CP-0001','2026-07-10','cash_payment',NULL,'Staff salaries - July 2026','posted',1,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(3,'BP-0001','2026-07-15','bank_payment',NULL,'Marketing campaign - Gulberg hoarding','posted',1,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(10,'JV-0001','2026-08-14','journal',NULL,'Payable - ABC','posted',1,'2026-08-14','18:28:17','2026-08-14','18:28:17'),(13,'JV-0002','2026-08-14','journal',1,'Cash sale BK-0004 received in HBL','posted',1,'2026-08-14','20:52:09','2026-08-14','20:52:09'),(14,'JV-0003','2026-08-15','journal',1,'Cash sale BK-0005 received in HBL','posted',1,'2026-08-15','14:57:10','2026-08-15','14:57:10'),(19,'BR-0001','2026-08-15','bank_receipt',1,'Received from Ahmed Hassan','posted',1,'2026-08-15','15:46:16','2026-08-15','15:46:16'),(21,'CP-0002','2026-08-15','cash_payment',1,'Payment to employee','posted',1,'2026-08-15','16:02:18','2026-08-15','16:02:45'),(22,'JV-0004','2026-08-15','journal',NULL,'Foundation work','posted',1,'2026-08-15','16:53:38','2026-08-15','16:53:38'),(23,'JV-0005','2026-08-15','journal',NULL,'Advance payment','posted',1,'2026-08-15','16:53:39','2026-08-15','16:53:39'),(24,'CP-0003','2026-08-15','cash_payment',NULL,'Site payment via cash paid','posted',1,'2026-08-15','16:54:29','2026-08-15','16:54:29'),(25,'JV-0006','2026-08-15','journal',NULL,'Al Noor foundation','posted',1,'2026-08-15','17:22:43','2026-08-15','17:22:43'),(27,'CR-0002','2026-08-17','cash_receipt',1,'payment from employeee','posted',1,'2026-08-17','15:48:37','2026-08-17','15:48:37'),(28,'JV-0007','2026-08-17','journal',1,'Purchase: Softynix','posted',1,'2026-08-17','16:23:52','2026-08-17','16:23:52'),(29,'CP-0004','2026-08-17','cash_payment',1,'Payment for purchase: Softynix','posted',1,'2026-08-17','16:23:52','2026-08-17','16:23:52'),(30,'CR-0003','2026-08-18','cash_receipt',1,'Received from Ahmed Hassan','posted',1,'2026-08-18','08:00:16','2026-08-18','08:00:16');
+INSERT INTO `vouchers` (`id`, `voucher_no`, `voucher_date`, `voucher_type`, `project_id`, `narration`, `status`, `created_by`, `created_date`, `created_time`, `updated_date`, `updated_time`) VALUES (1,'CR-0001','2026-07-05','cash_receipt',NULL,'Rent collected RA-0001 June 2026','posted',1,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(2,'CP-0001','2026-07-10','cash_payment',NULL,'Staff salaries - July 2026','posted',1,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(3,'BP-0001','2026-07-15','bank_payment',NULL,'Marketing campaign - Gulberg hoarding','posted',1,'2026-07-31','08:14:27','2026-07-31','08:14:27'),(10,'JV-0001','2026-08-14','journal',NULL,'Payable - ABC','posted',1,'2026-08-14','18:28:17','2026-08-14','18:28:17'),(13,'JV-0002','2026-08-14','journal',1,'Cash sale BK-0004 received in HBL','posted',1,'2026-08-14','20:52:09','2026-08-14','20:52:09'),(14,'JV-0003','2026-08-15','journal',1,'Cash sale BK-0005 received in HBL','posted',1,'2026-08-15','14:57:10','2026-08-15','14:57:10'),(19,'BR-0001','2026-08-15','bank_receipt',1,'Received from Ahmed Hassan','posted',1,'2026-08-15','15:46:16','2026-08-15','15:46:16'),(21,'CP-0002','2026-08-15','cash_payment',1,'Payment to employee','posted',1,'2026-08-15','16:02:18','2026-08-15','16:02:45'),(22,'JV-0004','2026-08-15','journal',NULL,'Foundation work','posted',1,'2026-08-15','16:53:38','2026-08-15','16:53:38'),(23,'JV-0005','2026-08-15','journal',NULL,'Advance payment','posted',1,'2026-08-15','16:53:39','2026-08-15','16:53:39'),(24,'CP-0003','2026-08-15','cash_payment',NULL,'Site payment via cash paid','posted',1,'2026-08-15','16:54:29','2026-08-15','16:54:29'),(25,'JV-0006','2026-08-15','journal',NULL,'Al Noor foundation','posted',1,'2026-08-15','17:22:43','2026-08-15','17:22:43'),(27,'CR-0002','2026-08-17','cash_receipt',1,'payment from employeee','posted',1,'2026-08-17','15:48:37','2026-08-17','15:48:37'),(28,'JV-0007','2026-08-17','journal',1,'Purchase: Softynix','posted',1,'2026-08-17','16:23:52','2026-08-17','16:23:52'),(29,'CP-0004','2026-08-17','cash_payment',1,'Payment for purchase: Softynix','posted',1,'2026-08-17','16:23:52','2026-08-17','16:23:52'),(30,'CR-0003','2026-08-18','cash_receipt',1,'Received from Ahmed Hassan','posted',1,'2026-08-18','08:00:16','2026-08-18','08:00:16');
 /*!40000 ALTER TABLE `vouchers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -2831,7 +2848,7 @@ CREATE TABLE `customer_payments` (
   `customer_id` int(10) unsigned NOT NULL,
   `payment_date` date NOT NULL,
   `amount` decimal(14,2) NOT NULL DEFAULT 0.00,
-  `payment_mode` enum('cash','bank') NOT NULL DEFAULT 'cash',
+  `payment_mode` enum('cash','bank','credit') NOT NULL DEFAULT 'cash',
   `bank_id` int(10) unsigned DEFAULT NULL,
   `reference` varchar(120) DEFAULT NULL,
   `narration` varchar(255) DEFAULT NULL,

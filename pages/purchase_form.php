@@ -89,9 +89,9 @@ if (is_post()) {
     }
 
     if ($editId && $purchase) {
-        $oldItems = db_all("SELECT product_id, quantity, unit_cost FROM purchase_items WHERE purchase_id = ?", [$editId]);
+        $oldItems = db_all("SELECT product_id, quantity, unit_price FROM purchase_items WHERE purchase_id = ?", [$editId]);
         foreach ($oldItems as $oi) {
-            if ($oi['product_id']) stock_adjust($oi['product_id'], 'issue', (float)$oi['quantity'], (float)$oi['unit_cost'], 'purchase', $editId);
+            if ($oi['product_id']) stock_adjust($oi['product_id'], 'issue', (float)$oi['quantity'], (float)$oi['unit_price'], 'purchase', $editId);
         }
         db_exec("UPDATE purchases SET vendor_id=?, purchase_date=?, project_id=?, narration=?, total_amount=?, discount=?, paid_amount=?, payment_mode=?, bank_id=?, reference=?, status=?, updated_date=CURDATE(), updated_time=CURTIME() WHERE id=?",
             [$vendorId, $purchaseDate, $projectId, $narration, $totalAmount, $discount, $paidAmount, $paymentMode, $bankId, $reference, $status, $editId]);

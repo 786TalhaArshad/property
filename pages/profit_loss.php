@@ -9,7 +9,7 @@ $from = $_GET['from'] ?? date('Y-01-01');
 $to = $_GET['to'] ?? date('Y-m-d');
 $project_id = (int)($_GET['project_id'] ?? active_project_id());
 
-$projCond = $project_id > 0 ? " AND v.project_id = $project_id" : '';
+$projCond = $project_id > 0 ? " AND v.project_id = ?" : '';
 
 $income = db_all("SELECT a.code, a.name,
                   (SELECT COALESCE(SUM(vi.credit),0) FROM voucher_items vi JOIN vouchers v ON v.id = vi.voucher_id WHERE vi.account_id = a.id AND v.status = 'posted' AND v.voucher_date BETWEEN ? AND ?" . $projCond . ") AS cr,

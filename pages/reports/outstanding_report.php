@@ -32,7 +32,7 @@ foreach ($inst as $r) {
     $instByBooking[$bk]['out'] += $amt;
 }
 
-$rent = db_all("SELECT rs.*, ra.agreement_no, p.property_no, t.full_name AS tenant_name, t.phone
+$rent = db_all("SELECT rs.*, ra.agreement_no, p.property_no, t.full_name AS tenant_name, t.emergency_contact AS phone
                 FROM rent_schedule rs
                 JOIN rental_agreements ra ON ra.id = rs.agreement_id
                 JOIN properties p ON p.id = ra.property_id

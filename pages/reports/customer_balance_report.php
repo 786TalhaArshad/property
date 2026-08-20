@@ -18,6 +18,7 @@ $customers = db_all("SELECT c.id, c.full_name, c.customer_no, c.phone, c.balance
                      COALESCE(SUM(b.total_price),0) - COALESCE((SELECT SUM(r.amount) FROM receipts r WHERE r.customer_id = c.id),0) AS balance
                      FROM customers c
                      LEFT JOIN bookings b ON b.customer_id = c.id AND $where
+                     LEFT JOIN properties p ON p.id = b.property_id
                      GROUP BY c.id HAVING balance != 0
                      ORDER BY balance DESC", $params);
 

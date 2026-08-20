@@ -30,7 +30,10 @@ foreach ($quotations as $q) {
     $totalAmount += (float)$q['amount'];
 }
 $accepted = $statusCounts['accepted'] ?? 0;
-$converted = db_get("SELECT COUNT(*) AS cnt FROM bookings b WHERE b.booking_date BETWEEN ? AND ?" . ($project_id ? " AND EXISTS (SELECT 1 FROM properties p WHERE p.id = b.property_id AND p.project_id = $project_id)" : ""), $paramsQ)['cnt'];
+$convQ = "SELECT COUNT(*) AS cnt FROM bookings b WHERE b.booking_date BETWEEN ? AND ?";
+$convParams = [$from, $to];
+if ($project_id) { $convQ .= " AND EXISTS (SELECT 1 FROM properties p WHERE p.id = b.property_id AND p.project_id = ?)"; $convParams[] = $project_id; }
+$converted = db_get($convQ, $convParams)['cnt'];
 $conversionRate = count($quotations) > 0 ? ($converted / count($quotations) * 100) : 0;
 $projects = db_all("SELECT id, name FROM projects ORDER BY name");
 $projectName = '';

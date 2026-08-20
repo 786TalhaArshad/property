@@ -13,7 +13,7 @@ $where = "ub.billing_month >= ? AND ub.billing_month <= ?";
 $ymFrom = date('Y-m', strtotime($from));
 $ymTo = date('Y-m', strtotime($to));
 $params = [$ymFrom, $ymTo];
-if ($project_id) { $where .= " AND ub.project_id = ?"; $params[] = $project_id; }
+if ($project_id) { $where .= " AND p.project_id = ?"; $params[] = $project_id; }
 
 $bills = db_all("SELECT ub.*, u.utility_type, p.property_no, t.full_name AS tenant_name, pr.name AS project_name
                  FROM utility_bills ub

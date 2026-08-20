@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS material_issue_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. COA: Stock in Hand (Asset)
-INSERT IGNORE INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, status, created_date, created_time, updated_date, updated_time)
-VALUES ('1200', 'Stock in Hand', 'asset', 0, 0.00, 1, CURDATE(), CURTIME(), CURDATE(), CURTIME());
+INSERT IGNORE INTO chart_of_accounts (code, name, account_type, parent_id, opening_balance, created_date, created_time, updated_date, updated_time)
+VALUES ('1200', 'Stock in Hand', 'asset', NULL, 0.00, CURDATE(), CURTIME(), CURDATE(), CURTIME());
 
 -- 6. Permissions
 INSERT IGNORE INTO permissions (module, slug, name) VALUES

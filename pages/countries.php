@@ -44,7 +44,7 @@ include '../includes/header.php';
         <input type="text" class="form-control table-search" data-table="#dataTable" placeholder="Search countries...">
     </div>
     <?php if ($canEdit): ?>
-    <button class="btn btn-primary ms-auto" data-add="Add Country"><i class="bi bi-plus-lg me-1"></i>Add Country</button>
+    <button class="btn btn-primary ms-auto" data-add="Add Country" data-bs-toggle="modal" data-bs-target="#recordModal"><i class="bi bi-plus-lg me-1"></i>Add Country</button>
     <?php endif; ?>
 </div>
 
